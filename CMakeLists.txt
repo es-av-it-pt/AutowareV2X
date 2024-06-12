@@ -35,6 +35,7 @@ ament_auto_add_library(autoware_v2x SHARED
   src/v2x_app.cpp
   src/application.cpp
   src/cpm_application.cpp
+  src/cam_application.cpp
   src/ethernet_device.cpp
   src/link_layer.cpp
   src/raw_socket_link.cpp

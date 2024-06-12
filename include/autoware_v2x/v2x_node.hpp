@@ -4,10 +4,15 @@
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "autoware_auto_perception_msgs/msg/predicted_objects.hpp"
+#include "autoware_auto_vehicle_msgs/msg/velocity_report.hpp"
+#include "autoware_auto_vehicle_msgs/msg/gear_report.hpp"
+#include "autoware_adapi_v1_msgs/srv/get_vehicle_dimensions.hpp"
+#include "autoware_adapi_v1_msgs/msg/vehicle_dimensions.hpp"
 #include "tf2_msgs/msg/tf_message.hpp"
 #include <boost/asio/io_service.hpp>
 #include "autoware_v2x/v2x_app.hpp"
 #include "autoware_v2x/cpm_application.hpp"
+#include "autoware_v2x/cam_application.hpp"
 #include "autoware_v2x/time_trigger.hpp"
 #include "autoware_v2x/link_layer.hpp"
 #include "autoware_v2x/ethernet_device.hpp"
@@ -30,12 +35,20 @@ namespace v2x
 
   private:
     void objectsCallback(const autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr msg);
+    void velocityReportCallback(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr msg);
+    void gearReportCallback(const autoware_auto_vehicle_msgs::msg::GearReport::ConstSharedPtr msg);
+    void getVehicleDimensionsCallback(const autoware_adapi_v1_msgs::srv::GetVehicleDimensions::Response::ConstSharedPtr msg);
     void tfCallback(const tf2_msgs::msg::TFMessage::ConstSharedPtr msg);
 
     rclcpp::Subscription<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr objects_sub_;
+    rclcpp::Subscription<autoware_auto_vehicle_msgs::msg::VelocityReport>::SharedPtr velocity_report_sub_;
+    rclcpp::Subscription<autoware_auto_vehicle_msgs::msg::GearReport>::SharedPtr gear_report_sub_;
+    rclcpp::Subscription<autoware_adapi_v1_msgs::srv::GetVehicleDimensions::Response>::SharedPtr get_vehicle_dimensions_;
     rclcpp::Subscription<tf2_msgs::msg::TFMessage>::SharedPtr tf_sub_;
     rclcpp::Publisher<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr cpm_objects_pub_;
     rclcpp::Publisher<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr cpm_sender_pub_;
+    rclcpp::Publisher<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr cam_objects_pub_;
+    rclcpp::Publisher<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr cam_sender_pub_;
 
     double pos_lat_;
     double pos_lon_;

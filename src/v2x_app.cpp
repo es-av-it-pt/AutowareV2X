@@ -6,6 +6,7 @@
 #include "autoware_v2x/security.hpp"
 #include "autoware_v2x/link_layer.hpp"
 #include "autoware_v2x/cpm_application.hpp"
+#include "autoware_v2x/cam_application.hpp"
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
@@ -14,6 +15,7 @@
 #include "tf2/LinearMath/Matrix3x3.h"
 
 #include <vanetza/asn1/cpm.hpp>
+#include <vanetza/asn1/cam.hpp>
 #include <sstream>
 #include <memory>
 #include <GeographicLib/UTMUPS.hpp>
@@ -28,11 +30,13 @@ using namespace std::chrono;
 
 namespace v2x
 {
-  V2XApp::V2XApp(V2XNode *node) : 
+  V2XApp::V2XApp(V2XNode *node) :
     node_(node),
     tf_received_(false),
     tf_interval_(0),
-    cp_started_(false)
+    vehicle_dimensions_set_(false),
+    cp_started_(false),
+    cam_started_(false)
   {
   }
 
@@ -43,6 +47,30 @@ namespace v2x
     }
     if (tf_received_ && cp_started_) {
       cp->updateObjectsList(msg);
+    }
+  }
+
+  void V2XApp::getVehicleDimensions(const autoware_adapi_v1_msgs::msg::VehicleDimensions msg) {
+    if (vehicle_dimensions_set_) return;
+    cam->getVehicleDimensions(msg);
+    vehicle_dimensions_set_ = true;
+  }
+
+  void V2XApp::velocityReportCallback(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr msg) {
+    if (!velocity_report_received_) {
+      RCLCPP_WARN(node_->get_logger(), "[V2XApp::velocityReportCallback VelocityReport not received yet");
+    }
+    if (velocity_report_received_ && cam_started_) {
+      cam->updateVelocityReport(msg);
+    }
+  }
+
+  void V2XApp::gearReportCallback(const autoware_auto_vehicle_msgs::msg::GearReport::ConstSharedPtr msg) {
+    if (!gear_report_received_) {
+      RCLCPP_WARN(node_->get_logger(), "[V2XApp::gearReportCallback GearReport not received yet");
+    }
+    if (gear_report_received_ && cam_started_) {
+      cam->updateGearReport(msg);
     }
   }
 
@@ -80,19 +108,26 @@ namespace v2x
 
     // Reverse projection from UTM to geographic.
     GeographicLib::UTMUPS::Reverse(
-      zone, 
-      northp, 
-      grid_num_x * grid_size + x, 
-      grid_num_y * grid_size + y, 
-      lat, 
+      zone,
+      northp,
+      grid_num_x * grid_size + x,
+      grid_num_y * grid_size + y,
+      lat,
       lon
     );
-    
+
     if (cp && cp_started_) {
       cp->updateMGRS(&x, &y);
       cp->updateRP(&lat, &lon, &z);
       cp->updateHeading(&yaw);
       cp->updateGenerationTime(&gdt, &timestamp_msec);
+    }
+
+    if (cam && cp_started_) {
+      cam->updateMGRS(&x, &y);
+      cam->updateRP(&lat, &lon, &z);
+      cam->updateHeading(&yaw);
+      cam->updateGenerationTime(&gdt, &timestamp_msec);
     }
   }
 
@@ -132,10 +167,13 @@ namespace v2x
     bool is_sender;
     node_->get_parameter("is_sender", is_sender);
     cp = new CpmApplication(node_, trigger.runtime(), is_sender);
-    
+    cam = new CamApplication(node_, trigger.runtime(), is_sender);
+
     context.enable(cp);
+    context.enable(cam);
 
     cp_started_ = true;
+    cam_started_ = true;
 
     io_service.run();
   }
