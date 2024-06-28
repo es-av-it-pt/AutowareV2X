@@ -40,9 +40,11 @@ namespace v2x
     ego_(),
     velocityReport_(),
     gearReport_(),
+    steeringReport_(),
     generationTime_(0),
     updating_velocity_report_(false),
     updating_gear_report_(false),
+    updating_steering_report_(false),
     sending_(false),
     is_sender_(is_sender),
     reflect_packet_(false),
@@ -71,19 +73,11 @@ namespace v2x
     schedule_timer();
     send();
   }
-  
+
   CamApplication::PortType CamApplication::port() {
     return btp::ports::CAM;
   }
-  
-  //std::string CamApplication::uuidToHexString(const unique_identifier_msgs::msg::UUID &id) {
-  //  std::stringstream ss;
-  //  for (int i = 0; i < id.uuid.size(); i++) {
-  //    ss << std::hex << std::setfill('0') << std::setw(2) << (int)id.uuid[i];
-  //  }
-  //  return ss.str();
-  //}
-  
+
   void CamApplication::indicate(const Application::DataIndication &, Application::UpPacketPtr)
   {
     // TODO: implement
@@ -93,13 +87,13 @@ namespace v2x
     ego_.mgrs_x = *x;
     ego_.mgrs_y = *y;
   }
-  
+
   void CamApplication::updateRP(double *lat, double *lon, double *altitude) {
     ego_.latitude = *lat;
     ego_.longitude = *lon;
     ego_.altitude = *altitude;
   }
-  
+
   void CamApplication::updateGenerationTime(int *gdt, long *gdt_timestamp) {
     generationTime_ = *gdt;
     gdt_timestamp_ = *gdt_timestamp; // ETSI-epoch milliseconds timestamp
@@ -109,23 +103,6 @@ namespace v2x
     ego_.heading = *yaw;
   }
 
-  //void CamApplication::setAllObjectsOfPersonsAnimalsToSend(const autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr msg) {
-  //  if (msg->objects.size() > 0) {
-  //    for (autoware_auto_perception_msgs::msg::PredictedObject obj : msg->objects) {
-  //      std::string object_uuid = uuidToHexString(obj.object_id);
-  //      auto found_object = std::find_if(objectsList.begin(), objectsList.end(), [&](auto const &e) {
-  //        return !strcmp(e.uuid.c_str(), object_uuid.c_str());
-  //      });
-  //      
-  //      if (found_object == objectsList.end()) {
-  //        
-  //      } else {
-  //        found_object->to_send = true;
-  //      }
-  //    }
-  //  }
-  //}
-  
   void CamApplication::getVehicleDimensions(const autoware_adapi_v1_msgs::msg::VehicleDimensions msg) {
     vehicleDimensions_.wheel_radius = msg.wheel_radius;
     vehicleDimensions_.wheel_width = msg.wheel_width;
@@ -137,23 +114,23 @@ namespace v2x
     vehicleDimensions_.right_overhang = msg.right_overhang;
     vehicleDimensions_.height = msg.height;
   }
-  
+
   void CamApplication::updateVelocityReport(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr msg) {
     if (updating_velocity_report_) {
-      RCLCPP_WARN(node_->get_logger(), "[CamApplication::updatevelocityReport_] already updating velocity report");
+      RCLCPP_WARN(node_->get_logger(), "[CamApplication::updateVelocityReport] already updating velocity report");
       return;
     }
-    
+
     updating_velocity_report_ = true;
-    
+
     rclcpp::Time msg_stamp(msg->header.stamp.sec, msg->header.stamp.nanosec);
     float dt = (msg_stamp - velocityReport_.stamp).seconds();
     if (dt == 0) {
-      RCLCPP_WARN(node_->get_logger(), "[CamApplication::updatevelocityReport_] deltaTime is 0");
+      RCLCPP_WARN(node_->get_logger(), "[CamApplication::updateVelocityReport] deltaTime is 0");
       return;
     }
     float longitudinal_acceleration = (msg->longitudinal_velocity - velocityReport_.longitudinal_velocity) / dt;
-    
+
     velocityReport_.stamp = msg->header.stamp;
     velocityReport_.heading_rate = msg->heading_rate;
     velocityReport_.lateral_velocity = msg->lateral_velocity;
@@ -163,49 +140,61 @@ namespace v2x
 
   void CamApplication::updateGearReport(const autoware_auto_vehicle_msgs::msg::GearReport::ConstSharedPtr msg) {
     if (updating_gear_report_) {
-      RCLCPP_WARN(node_->get_logger(), "[CamApplication::updatevelocityReport_] already updating gear report");
+      RCLCPP_WARN(node_->get_logger(), "[CamApplication::updateGearReport] already updating gear report");
       return;
     }
 
     updating_gear_report_ = true;
 
-    gearReport_ = msg->report;
+    gearReport_.stamp = msg->stamp;
+    gearReport_.report = msg->report;
   }
-  
+
+  void CamApplication::updateSteeringReport(const autoware_auto_vehicle_msgs::msg::SteeringReport::ConstSharedPtr msg) {
+    if (updating_steering_report_) {
+      RCLCPP_WARN(node_->get_logger(), "[CamApplication::updateSteeringReport] already updating steering report");
+      return;
+    }
+
+    updating_steering_report_ = true;
+
+    steeringReport_.stamp = msg->stamp;
+    steeringReport_.steering_tire_angle = msg->steering_tire_angle;
+  }
+
   void CamApplication::send() {
     if (!is_sender_) return;
-    
+
     if (sending_) {
       RCLCPP_WARN(node_->get_logger(), "[CamApplication::send] already sending");
       return;
     }
-    
+
     sending_ = true;
 
-    //printObjectsList(cam_num_);
-    
     RCLCPP_INFO(node_->get_logger(), "[CamApplication::send] cam_num: %d", cam_num_);
-    // RCLCPP_INFO(node_->get_logger(), "[CamApplication::send] sending CAM");
-    
+
     vanetza::asn1::Cam message;
-    
+
     ItsPduHeader_t &header = message->header;
     header.protocolVersion = 2;
     header.messageID = ItsPduHeader__messageID_cam;
-    header.stationID = 0;
-    
+    header.stationID = cam_num_;
+
     CoopAwareness_t &cam = message->cam;
 
-    //asn_long2INTEGER(&cam.generationDeltaTime, (long) gdt_timestamp_);
-    
+    cam.generationDeltaTime = std::chrono::duration_cast<std::chrono::milliseconds>(cam_interval_).count();
+
     BasicContainer_t &basic_container = cam.camParameters.basicContainer;
     basic_container.stationType = StationType_passengerCar;
-    basic_container.referencePosition.latitude = ego_.latitude * 1e7;
-    basic_container.referencePosition.longitude = ego_.longitude * 1e7;
-    basic_container.referencePosition.altitude.altitudeValue = ego_.altitude;
-    
+    float latitude = ego_.latitude * 1e7;
+    float longitude = ego_.longitude * 1e7;
+    float altitude = ego_.altitude * 100;
+    basic_container.referencePosition.latitude = latitude >= -900000000 && latitude <= 900000000 ? latitude : Latitude_unavailable;
+    basic_container.referencePosition.longitude = longitude >= -1800000000 && longitude <= 1800000000 ? longitude : Longitude_unavailable;
+    basic_container.referencePosition.altitude.altitudeValue = altitude > -100000 && altitude < 800000 ? altitude : AltitudeValue_unavailable;
+
     // UNAVAILABLE VALUES FOR TESTING
-    basic_container.referencePosition.altitude.altitudeConfidence = AltitudeConfidence_unavailable;
     basic_container.referencePosition.positionConfidenceEllipse.semiMajorConfidence = SemiAxisLength_unavailable;
     basic_container.referencePosition.positionConfidenceEllipse.semiMinorConfidence = SemiAxisLength_unavailable;
     basic_container.referencePosition.positionConfidenceEllipse.semiMajorOrientation = HeadingValue_unavailable;
@@ -213,55 +202,48 @@ namespace v2x
 
     BasicVehicleContainerHighFrequency_t &bvc = cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency;
     cam.camParameters.highFrequencyContainer.present = HighFrequencyContainer_PR_basicVehicleContainerHighFrequency;
-    
+
     int heading = std::lround(((-ego_.heading * 180.0 / M_PI) + 90.0) * 10.0);
     if (heading < 0) heading += 3600;
     bvc.heading.headingValue = heading;
-    
+
     float heading_rate = velocityReport_.heading_rate;
     float lateral_velocity = velocityReport_.lateral_velocity;
     float longitudinal_velocity = velocityReport_.longitudinal_velocity;
-    
-    float speed = std::sqrt(std::pow(longitudinal_velocity, 2) + std::pow(lateral_velocity, 2));
-    bvc.speed.speedValue = std::lround(speed * 100);
+    float longitudinal_acceleration = std::lround(velocityReport_.longitudinal_acceleration * 100);
+    uint8_t gearStatus = gearReport_.report;
+    float steering_tire_angle = steeringReport_.steering_tire_angle;
 
-    if ((gearReport_ >= 2 && gearReport_ <= 19) || gearReport_ == 21 || gearReport_ == 22)
+    float speed = std::lround(std::sqrt(std::pow(longitudinal_velocity, 2) + std::pow(lateral_velocity, 2)) * 100);
+    bvc.speed.speedValue = speed >= 0 && speed < 16382 ? speed : SpeedValue_unavailable;
+
+    if ((gearStatus >= 2 && gearStatus <= 19) || gearStatus == 21 || gearStatus == 22)
       bvc.driveDirection = DriveDirection_forward;
-    else if (gearReport_ == 20 || gearReport_ == 21)
+    else if (gearStatus == 20 || gearStatus == 21)
       bvc.driveDirection = DriveDirection_backward;
     else
       bvc.driveDirection = DriveDirection_unavailable;
-    
-    float vehicleLength = vehicleDimensions_.front_overhang + vehicleDimensions_.wheel_base + vehicleDimensions_.rear_overhang;
-    if (vehicleLength <= 0 || vehicleLength >= 1023)
-      bvc.vehicleLength.vehicleLengthValue = VehicleLengthValue_unavailable;
-    else
-      bvc.vehicleLength.vehicleLengthValue = vehicleLength;
-    
-    float vehicleWidth = vehicleDimensions_.left_overhang + vehicleDimensions_.wheel_tread + vehicleDimensions_.right_overhang;
-    if (vehicleWidth <= 0 || vehicleWidth >= 62)
-      bvc.vehicleWidth = VehicleWidth_unavailable;
-    else
-      bvc.vehicleWidth = vehicleWidth;
 
-    //if (longitudinal_acceleration > 160 || longitudinal_acceleration < -160) {
-    //  RCLCPP_WARN(node_->get_logger(), "[CamApplication::send] Longitudinal acceleration out of bounds: %d", longitudinal_acceleration);
-    //  bvc.longitudinalAcceleration.longitudinalAccelerationValue = LongitudinalAccelerationValue_unavailable;
-    //} else {
-    //  bvc.longitudinalAcceleration.longitudinalAccelerationValue = longitudinal_acceleration;
-    //}
-    
-    bvc.longitudinalAcceleration.longitudinalAccelerationValue = LongitudinalAccelerationValue_unavailable;
-    
-    if (longitudinal_velocity != 0)
-      bvc.curvature.curvatureValue = std::lround(lateral_velocity / std::pow(longitudinal_velocity, 2) * 100);
-    else
-      bvc.curvature.curvatureValue = std::numeric_limits<long>::infinity();
+    float vehicleLength = std::lround(vehicleDimensions_.front_overhang + vehicleDimensions_.wheel_base + vehicleDimensions_.rear_overhang * 100);
+    bvc.vehicleLength.vehicleLengthValue = vehicleLength >= 0 && vehicleLength <= 1022 ? vehicleLength : VehicleLengthValue_unavailable;
+
+    float vehicleWidth = std::lround(vehicleDimensions_.left_overhang + vehicleDimensions_.wheel_tread + vehicleDimensions_.right_overhang * 100);
+    bvc.vehicleWidth = vehicleWidth >= 0 && vehicleWidth <= 61 ? vehicleWidth : VehicleWidth_unavailable;
+
+    bvc.longitudinalAcceleration.longitudinalAccelerationValue = longitudinal_acceleration >= -160 && longitudinal_acceleration <= 160 ? longitudinal_acceleration : LongitudinalAccelerationValue_unavailable;
+
+    long curvature = longitudinal_velocity != 0 ? std::abs(std::lround(lateral_velocity / std::pow(longitudinal_velocity, 2) * 100)) * (steering_tire_angle < 0 ? -1 : 1)
+                                                : std::numeric_limits<long>::infinity();
+    bvc.curvature.curvatureValue = curvature >= -1023 && curvature <= 1022 ? curvature : CurvatureValue_unavailable;
+
     bvc.curvatureCalculationMode = CurvatureCalculationMode_yawRateNotUsed;
 
-    bvc.yawRate.yawRateValue = std::lround(heading_rate * 100);
+    long heading_rate_deg = std::abs(std::lround(heading_rate * (180.0 / M_PI))) * (steering_tire_angle < 0 ? -1 : 1);
+    bvc.yawRate.yawRateValue = heading_rate_deg >= -32766 && heading_rate_deg <= 32766 ? heading_rate_deg : YawRateValue_unavailable;
 
     // UNAVAILABLE VALUES FOR TESTING
+    basic_container.referencePosition.altitude.altitudeConfidence = AltitudeConfidence_unavailable;
+    // ------------------------------
     bvc.heading.headingConfidence = HeadingConfidence_unavailable;
     bvc.speed.speedConfidence = SpeedConfidence_unavailable;
     bvc.vehicleLength.vehicleLengthConfidenceIndication = VehicleLengthConfidenceIndication_unavailable;
@@ -269,19 +251,18 @@ namespace v2x
     bvc.curvature.curvatureConfidence = CurvatureConfidence_unavailable;
     bvc.yawRate.yawRateConfidence = YawRateConfidence_unavailable;
     // ------------------------------
-    
+
     RCLCPP_INFO(node_->get_logger(), "[CamApplication::send] Sending CAM");
-    //insertCamToCamTable(message, (char *) "cam_sent");
     std::unique_ptr<geonet::DownPacket> payload{new geonet::DownPacket()};
     payload->layer(OsiLayer::Application) = std::move(message);
-    
+
     Application::DataRequest request;
     request.its_aid = aid::CP;
     request.transport_type = geonet::TransportType::SHB;
     request.communication_profile = geonet::CommunicationProfile::ITS_G5;
-    
+
     Application::DataConfirm confirm = Application::request(request, std::move(payload), node_);
-    
+
     if (!confirm.accepted()) {
       throw std::runtime_error("[CamApplication::send] CAM application data request failed");
     }

@@ -35,17 +35,18 @@ namespace v2x
 
     objects_sub_ = this->create_subscription<autoware_auto_perception_msgs::msg::PredictedObjects>("/perception/object_recognition/objects", 10, std::bind(&V2XNode::objectsCallback, this, _1));
     tf_sub_ = this->create_subscription<tf2_msgs::msg::TFMessage>("/tf", 10, std::bind(&V2XNode::tfCallback, this, _1));
-    
+
     // Topic subscriptions for CAMApplication
     velocity_report_sub_ = this->create_subscription<autoware_auto_vehicle_msgs::msg::VelocityReport>("/vehicle/status/velocity_status", 10, std::bind(&V2XNode::velocityReportCallback, this, _1));
     gear_report_sub_ = this->create_subscription<autoware_auto_vehicle_msgs::msg::GearReport>("/vehicle/status/gear_status", 10, std::bind(&V2XNode::gearReportCallback, this, _1));
+    steering_report_sub_ = this->create_subscription<autoware_auto_vehicle_msgs::msg::SteeringReport>("/vehicle/status/steering_status", 10, std::bind(&V2XNode::steeringReportCallback, this, _1));
     get_vehicle_dimensions_ = this->create_subscription<autoware_adapi_v1_msgs::srv::GetVehicleDimensions::Response>("/api/vehicle/dimensions", 10, std::bind(&V2XNode::getVehicleDimensionsCallback, this, _1));
 
     cpm_objects_pub_ = create_publisher<autoware_auto_perception_msgs::msg::PredictedObjects>("/v2x/cpm/objects", rclcpp::QoS{10});
     // cpm_sender_pub_ = create_publisher<autoware_auto_perception_msgs::msg::PredictedObjects>("/v2x/cpm/sender", rclcpp::QoS{10});
 
     // Declare Parameters
-    this->declare_parameter<std::string>("network_interface", "enx5414a7c7d3af");
+    this->declare_parameter<std::string>("network_interface", "v2x_testing");
     this->declare_parameter<bool>("is_sender", true);
 
     // Launch V2XApp in a new thread
@@ -171,15 +172,19 @@ namespace v2x
   void V2XNode::tfCallback(const tf2_msgs::msg::TFMessage::ConstSharedPtr msg) {
     app->tfCallback(msg);
   }
-  
+
   void V2XNode::velocityReportCallback(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr msg) {
     app->velocityReportCallback(msg);
   }
-  
+
   void V2XNode::gearReportCallback(const autoware_auto_vehicle_msgs::msg::GearReport::ConstSharedPtr msg) {
     app->gearReportCallback(msg);
   }
-  
+
+  void V2XNode::steeringReportCallback(const autoware_auto_vehicle_msgs::msg::SteeringReport::ConstSharedPtr msg) {
+    app->steeringReportCallback(msg);
+  }
+
   void V2XNode::getVehicleDimensionsCallback(const autoware_adapi_v1_msgs::srv::GetVehicleDimensions::Response::ConstSharedPtr msg) {
     app->getVehicleDimensions(msg->dimensions);
   }

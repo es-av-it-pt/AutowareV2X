@@ -58,7 +58,7 @@ namespace v2x
 
   void V2XApp::velocityReportCallback(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr msg) {
     if (!velocity_report_received_) {
-      RCLCPP_WARN(node_->get_logger(), "[V2XApp::velocityReportCallback VelocityReport not received yet");
+      RCLCPP_WARN(node_->get_logger(), "[V2XApp::velocityReportCallback] VelocityReport not received yet");
     }
     if (velocity_report_received_ && cam_started_) {
       cam->updateVelocityReport(msg);
@@ -67,12 +67,21 @@ namespace v2x
 
   void V2XApp::gearReportCallback(const autoware_auto_vehicle_msgs::msg::GearReport::ConstSharedPtr msg) {
     if (!gear_report_received_) {
-      RCLCPP_WARN(node_->get_logger(), "[V2XApp::gearReportCallback GearReport not received yet");
+      RCLCPP_WARN(node_->get_logger(), "[V2XApp::gearReportCallback] GearReport not received yet");
     }
     if (gear_report_received_ && cam_started_) {
       cam->updateGearReport(msg);
     }
   }
+
+void V2XApp::steeringReportCallback(const autoware_auto_vehicle_msgs::msg::SteeringReport::ConstSharedPtr msg) {
+  if (!steering_report_received_) {
+    RCLCPP_WARN(node_->get_logger(), "[V2XApp::gearReportCallback] SteeringReport not received yet");
+  }
+  if (steering_report_received_ && cam_started_) {
+    cam->updateSteeringReport(msg);
+  }
+}
 
   void V2XApp::tfCallback(const tf2_msgs::msg::TFMessage::ConstSharedPtr msg) {
 

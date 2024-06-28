@@ -1,5 +1,5 @@
 <launch>
-  <arg name="network_interface" default="enx5414a7c7d3af"/>
+  <arg name="network_interface" default="v2x_testing"/>
   <arg name="is_sender" default="true"/>
   <node pkg="autoware_v2x" exec="autoware_v2x_node" namespace="v2x" output="screen">
     <param from="$(find-pkg-share autoware_v2x)/config/autoware_v2x.param.yaml"/>

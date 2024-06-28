@@ -1,4 +1,4 @@
 /**:
   ros__parameters:
-    network_interface: "enx5414a7c7d3af"
+    network_interface: "v2x_testing"
     is_sender: true
