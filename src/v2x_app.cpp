@@ -52,8 +52,7 @@ namespace v2x
 
   void V2XApp::getVehicleDimensions(const autoware_adapi_v1_msgs::msg::VehicleDimensions msg) {
     if (vehicle_dimensions_set_) return;
-    cam->getVehicleDimensions(msg);
-    vehicle_dimensions_set_ = true;
+    vehicle_dimensions_set_ = cam->setVehicleDimensions(msg);
   }
 
   void V2XApp::velocityReportCallback(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr msg) {
