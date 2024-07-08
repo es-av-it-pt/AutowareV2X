@@ -8,6 +8,9 @@
 #include "autoware_v2x/cpm_application.hpp"
 #include "autoware_v2x/cam_application.hpp"
 
+#include "autoware_adapi_v1_msgs/srv/get_vehicle_dimensions.hpp"
+#include "autoware_adapi_v1_msgs/msg/vehicle_dimensions.hpp"
+
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
 
@@ -40,7 +43,13 @@ namespace v2x
     velocity_report_sub_ = this->create_subscription<autoware_auto_vehicle_msgs::msg::VelocityReport>("/vehicle/status/velocity_status", 10, std::bind(&V2XNode::velocityReportCallback, this, _1));
     gear_report_sub_ = this->create_subscription<autoware_auto_vehicle_msgs::msg::GearReport>("/vehicle/status/gear_status", 10, std::bind(&V2XNode::gearReportCallback, this, _1));
     steering_report_sub_ = this->create_subscription<autoware_auto_vehicle_msgs::msg::SteeringReport>("/vehicle/status/steering_status", 10, std::bind(&V2XNode::steeringReportCallback, this, _1));
-    get_vehicle_dimensions_ = this->create_subscription<autoware_adapi_v1_msgs::srv::GetVehicleDimensions::Response>("/api/vehicle/dimensions", 10, std::bind(&V2XNode::getVehicleDimensionsCallback, this, _1));
+    get_vehicle_dimensions_ = this->create_client<autoware_adapi_v1_msgs::srv::GetVehicleDimensions>("/api/vehicle/dimensions");
+    if (get_vehicle_dimensions_->wait_for_service(std::chrono::seconds(60))) {
+      RCLCPP_INFO(get_logger(), "[V2XNode::getVehicleDimensions] Service /api/vehicle/dimensions is now available.");
+      this->getVehicleDimensions();
+    } else {
+      RCLCPP_ERROR(get_logger(), "[V2XNode::getVehicleDimensions] Service /api/vehicle/dimensions is not available after waiting (timeout=60s).");
+    }
 
     cpm_objects_pub_ = create_publisher<autoware_auto_perception_msgs::msg::PredictedObjects>("/v2x/cpm/objects", rclcpp::QoS{10});
     // cpm_sender_pub_ = create_publisher<autoware_auto_perception_msgs::msg::PredictedObjects>("/v2x/cpm/sender", rclcpp::QoS{10});
@@ -185,8 +194,29 @@ namespace v2x
     app->steeringReportCallback(msg);
   }
 
-  void V2XNode::getVehicleDimensionsCallback(const autoware_adapi_v1_msgs::srv::GetVehicleDimensions::Response::ConstSharedPtr msg) {
-    app->getVehicleDimensions(msg->dimensions);
+  void V2XNode::getVehicleDimensions() {
+    RCLCPP_INFO(get_logger(), "[V2XNode::getVehicleDimensions] Sending service request to /api/vehicle/dimensions");
+    auto request = std::make_shared<autoware_adapi_v1_msgs::srv::GetVehicleDimensions::Request>();
+    auto future_result = get_vehicle_dimensions_->async_send_request(request, [this](rclcpp::Client<autoware_adapi_v1_msgs::srv::GetVehicleDimensions>::SharedFuture future) {
+     try
+     {
+       auto response = future.get();
+       RCLCPP_INFO(get_logger(), "[V2XNode::getVehicleDimensions] Received response from /api/vehicle/dimensions");
+       try {
+         auto dimensions = response->dimensions;
+         if (dimensions.height == 0 || dimensions.wheel_base == 0 || dimensions.wheel_tread == 0)
+           this->getVehicleDimensions();
+         else
+           app->setVehicleDimensions(dimensions);
+       } catch (const std::exception &e) {
+         RCLCPP_ERROR(get_logger(), "[V2XNode::getVehicleDimensions] Service response of /api/vehicle/dimensions failed: %s", e.what());
+       }
+     }
+     catch (const std::exception &e)
+     {
+       RCLCPP_ERROR(get_logger(), "[V2XNode::getVehicleDimensions] Service call of /api/vehicle/dimensions failed: %s", e.what());
+     }
+   });
   }
 }
 

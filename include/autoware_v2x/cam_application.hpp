@@ -22,14 +22,14 @@ public:
   PortType port() override;
   void indicate(const DataIndication &, UpPacketPtr) override;
   void set_interval(vanetza::Clock::duration);
-  bool setVehicleDimensions(const autoware_adapi_v1_msgs::msg::VehicleDimensions);
-  void updateVelocityReport(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr);
-  void updateGearReport(const autoware_auto_vehicle_msgs::msg::GearReport::ConstSharedPtr);
-  void updateSteeringReport(const autoware_auto_vehicle_msgs::msg::SteeringReport::ConstSharedPtr);
   void updateMGRS(double *, double *);
   void updateRP(double *, double *, double *);
   void updateGenerationTime(int *, long *);
   void updateHeading(double *);
+  void setVehicleDimensions(const autoware_adapi_v1_msgs::msg::VehicleDimensions &);
+  void updateVelocityReport(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr);
+  void updateGearReport(const autoware_auto_vehicle_msgs::msg::GearReport::ConstSharedPtr);
+  void updateSteeringReport(const autoware_auto_vehicle_msgs::msg::SteeringReport::ConstSharedPtr);
   void send();
 
 private:

@@ -107,7 +107,7 @@ namespace v2x
     ego_.heading = *yaw;
   }
 
-  bool CamApplication::setVehicleDimensions(const autoware_adapi_v1_msgs::msg::VehicleDimensions msg) {
+  void CamApplication::setVehicleDimensions(const autoware_adapi_v1_msgs::msg::VehicleDimensions &msg) {
     vehicleDimensions_.wheel_radius = msg.wheel_radius;
     vehicleDimensions_.wheel_width = msg.wheel_width;
     vehicleDimensions_.wheel_base = msg.wheel_base;
@@ -117,8 +117,6 @@ namespace v2x
     vehicleDimensions_.left_overhang = msg.left_overhang;
     vehicleDimensions_.right_overhang = msg.right_overhang;
     vehicleDimensions_.height = msg.height;
-
-    return vehicleDimensions_.height != 0;
   }
 
   void CamApplication::updateVelocityReport(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr msg) {
@@ -129,7 +127,7 @@ namespace v2x
     updating_velocity_report_ = true;
 
     rclcpp::Time msg_stamp(msg->header.stamp.sec, msg->header.stamp.nanosec);
-    float dt = (msg_stamp - velocityReport_.stamp).seconds();
+    float dt = msg_stamp.seconds() - velocityReport_.stamp.seconds();
     if (dt == 0) {
       RCLCPP_WARN(node_->get_logger(), "[CamApplication::updateVelocityReport] deltaTime is 0");
       return;
@@ -141,6 +139,8 @@ namespace v2x
     velocityReport_.lateral_velocity = msg->lateral_velocity;
     velocityReport_.longitudinal_velocity = msg->longitudinal_velocity;
     velocityReport_.longitudinal_acceleration = longitudinal_acceleration;
+
+    updating_velocity_report_ = false;
   }
 
   void CamApplication::updateGearReport(const autoware_auto_vehicle_msgs::msg::GearReport::ConstSharedPtr msg) {
@@ -152,6 +152,8 @@ namespace v2x
 
     gearReport_.stamp = msg->stamp;
     gearReport_.report = msg->report;
+
+    updating_gear_report_ = false;
   }
 
   void CamApplication::updateSteeringReport(const autoware_auto_vehicle_msgs::msg::SteeringReport::ConstSharedPtr msg) {
@@ -163,6 +165,8 @@ namespace v2x
 
     steeringReport_.stamp = msg->stamp;
     steeringReport_.steering_tire_angle = msg->steering_tire_angle;
+
+    updating_steering_report_ = false;
   }
 
   void CamApplication::send() {
@@ -193,10 +197,17 @@ namespace v2x
     float latitude = ego_.latitude * 1e7;
     float longitude = ego_.longitude * 1e7;
     float altitude = ego_.altitude * 100;
-    basic_container.referencePosition.latitude = latitude >= -900000000 && latitude <= 900000000 ? latitude : Latitude_unavailable;
-    basic_container.referencePosition.longitude = longitude >= -1800000000 && longitude <= 1800000000 ? longitude : Longitude_unavailable;
-    basic_container.referencePosition.altitude.altitudeValue = altitude > -100000 && altitude < 800000 ? altitude : AltitudeValue_unavailable;
 
+    if (-900000000 <= latitude && latitude <= 900000000) basic_container.referencePosition.latitude = latitude;
+    else basic_container.referencePosition.latitude = Latitude_unavailable;
+    if (-1800000000 <= longitude && longitude <= 1800000000) basic_container.referencePosition.longitude = longitude;
+    else basic_container.referencePosition.longitude = Longitude_unavailable;
+    if (-100000 <= altitude && altitude <= 800000) basic_container.referencePosition.altitude.altitudeValue = altitude;
+    else basic_container.referencePosition.altitude.altitudeValue = AltitudeValue_unavailable;
+
+    // Articles consulted for the positionConficenceEllipse
+    // https://users.cs.utah.edu/~tch/CS4640F2019/resources/A%20geometric%20interpretation%20of%20the%20covariance%20matrix.pdf
+    // https://users.cs.utah.edu/~tch/CS6640F2020/resources/How%20to%20draw%20a%20covariance%20error%20ellipse.pdf
     if (positionConfidenceEllipse_.x.getSize() == positionConfidenceEllipse_.y.getSize()) {
       double xx_sum = 0;
       double yy_sum = 0;
@@ -227,15 +238,12 @@ namespace v2x
                                    : sigma_xx != 0 ? 0 : -90) * 10;
       if (majorOrientation < 0) majorOrientation += 3600;
 
-      basic_container.referencePosition.positionConfidenceEllipse.semiMajorConfidence = majorConfidence >= 0 && majorConfidence <= 4094
-                                                                                          ? majorConfidence
-                                                                                          : SemiAxisLength_unavailable;
-      basic_container.referencePosition.positionConfidenceEllipse.semiMinorConfidence = minorConfidence >= 0 && minorConfidence <= 4094
-                                                                                          ? minorConfidence
-                                                                                          : SemiAxisLength_unavailable;
-      basic_container.referencePosition.positionConfidenceEllipse.semiMajorOrientation = majorOrientation >= 0 && majorOrientation <= 3600
-                                                                                           ? majorOrientation
-                                                                                           : HeadingValue_unavailable;
+      if (0 <= majorConfidence && majorConfidence <= 4094) basic_container.referencePosition.positionConfidenceEllipse.semiMajorConfidence = majorConfidence;
+      else basic_container.referencePosition.positionConfidenceEllipse.semiMajorConfidence = SemiAxisLength_unavailable;
+      if (0 <= minorConfidence && minorConfidence <= 4094) basic_container.referencePosition.positionConfidenceEllipse.semiMinorConfidence = minorConfidence;
+      else basic_container.referencePosition.positionConfidenceEllipse.semiMinorConfidence = SemiAxisLength_unavailable;
+      if (0 <= majorOrientation && majorOrientation <= 3600) basic_container.referencePosition.positionConfidenceEllipse.semiMajorOrientation = majorOrientation;
+      else basic_container.referencePosition.positionConfidenceEllipse.semiMajorOrientation = HeadingValue_unavailable;
     } else {
       basic_container.referencePosition.positionConfidenceEllipse.semiMajorConfidence = SemiAxisLength_unavailable;
       basic_container.referencePosition.positionConfidenceEllipse.semiMinorConfidence = SemiAxisLength_unavailable;
@@ -247,9 +255,8 @@ namespace v2x
 
     int heading = std::lround(((-ego_.heading * 180.0 / M_PI) + 90.0) * 10.0);
     if (heading < 0) heading += 3600;
-    bvc.heading.headingValue = heading >= 0 && heading <= 3600
-                                 ? heading
-                                 : HeadingValue_unavailable;
+    if (0 <= heading && heading <= 3600) bvc.heading.headingValue = heading;
+    else bvc.heading.headingValue = HeadingValue_unavailable;
 
     float heading_rate = velocityReport_.heading_rate;
     float lateral_velocity = velocityReport_.lateral_velocity;
@@ -258,8 +265,9 @@ namespace v2x
     uint8_t gearStatus = gearReport_.report;
     float steering_tire_angle = steeringReport_.steering_tire_angle;
 
-    float speed = std::lround(std::sqrt(std::pow(longitudinal_velocity, 2) + std::pow(lateral_velocity, 2)) * 100);
-    bvc.speed.speedValue = speed >= 0 && speed < 16382 ? speed : SpeedValue_unavailable;
+    long speed = std::lround(std::sqrt(std::pow(longitudinal_velocity, 2) + std::pow(lateral_velocity, 2)) * 100);
+    if (0 <= speed && speed <= 16382) bvc.speed.speedValue = speed;
+    else bvc.speed.speedValue = SpeedValue_unavailable;
 
     if ((gearStatus >= 2 && gearStatus <= 19) || gearStatus == 23 || gearStatus == 24)
       bvc.driveDirection = DriveDirection_forward;
@@ -268,22 +276,28 @@ namespace v2x
     else
       bvc.driveDirection = DriveDirection_unavailable;
 
-    float vehicleLength = std::lround(vehicleDimensions_.front_overhang + vehicleDimensions_.wheel_base + vehicleDimensions_.rear_overhang * 100);
-    bvc.vehicleLength.vehicleLengthValue = vehicleLength >= 1 && vehicleLength <= 1022 ? vehicleLength : VehicleLengthValue_unavailable;
+    long vehicleLength = std::lround((vehicleDimensions_.front_overhang + vehicleDimensions_.wheel_base + vehicleDimensions_.rear_overhang) * 10);
+    RCLCPP_INFO(node_->get_logger(), "LENGTH: front_overhang: %f, wheel_base: %f, rear_overhang: %f, total: %ld", vehicleDimensions_.front_overhang, vehicleDimensions_.wheel_base, vehicleDimensions_.rear_overhang, vehicleLength);
+    if (1 <= vehicleLength && vehicleLength <= 1022) bvc.vehicleLength.vehicleLengthValue = vehicleLength;
+    else bvc.vehicleLength.vehicleLengthValue = VehicleLengthValue_unavailable;
 
-    float vehicleWidth = std::lround(vehicleDimensions_.left_overhang + vehicleDimensions_.wheel_tread + vehicleDimensions_.right_overhang * 100);
-    bvc.vehicleWidth = vehicleWidth >= 1 && vehicleWidth <= 61 ? vehicleWidth : VehicleWidth_unavailable;
+    long vehicleWidth = std::lround((vehicleDimensions_.left_overhang + vehicleDimensions_.wheel_tread + vehicleDimensions_.right_overhang) * 10);
+    RCLCPP_INFO(node_->get_logger(), "WIDTH: left_overhang: %f, wheel_tread: %f, right_overhang: %f, total: %ld", vehicleDimensions_.left_overhang, vehicleDimensions_.wheel_tread, vehicleDimensions_.right_overhang, vehicleWidth);
+    if (1 <= vehicleWidth && vehicleWidth <= 61) bvc.vehicleWidth = vehicleWidth;
+    else bvc.vehicleWidth = VehicleWidth_unavailable;
 
-    bvc.longitudinalAcceleration.longitudinalAccelerationValue = longitudinal_acceleration >= -160 && longitudinal_acceleration <= 160 ? longitudinal_acceleration : LongitudinalAccelerationValue_unavailable;
+    if (-160 <= longitudinal_acceleration && longitudinal_acceleration <= 160) bvc.longitudinalAcceleration.longitudinalAccelerationValue = longitudinal_acceleration;
+    else bvc.longitudinalAcceleration.longitudinalAccelerationValue = LongitudinalAccelerationValue_unavailable;
 
     long curvature = longitudinal_velocity != 0 ? std::abs(std::lround(lateral_velocity / std::pow(longitudinal_velocity, 2) * 100)) * (steering_tire_angle < 0 ? -1 : 1)
                                                 : std::numeric_limits<long>::infinity();
-    bvc.curvature.curvatureValue = curvature >= -1023 && curvature <= 1022 ? curvature : CurvatureValue_unavailable;
-
+    if (-1023 <= curvature && curvature <= 1022) bvc.curvature.curvatureValue = curvature;
+    else bvc.curvature.curvatureValue = CurvatureValue_unavailable;
     bvc.curvatureCalculationMode = CurvatureCalculationMode_yawRateNotUsed;
 
     long heading_rate_deg = std::abs(std::lround(heading_rate * (180.0 / M_PI))) * (steering_tire_angle < 0 ? -1 : 1);
-    bvc.yawRate.yawRateValue = heading_rate_deg >= -32766 && heading_rate_deg <= 32766 ? heading_rate_deg : YawRateValue_unavailable;
+    if (-32766 <= heading_rate_deg && heading_rate_deg <= 32766) bvc.yawRate.yawRateValue = heading_rate_deg;
+    else bvc.yawRate.yawRateValue = YawRateValue_unavailable;
 
     // UNAVAILABLE VALUES FOR TESTING
     basic_container.referencePosition.altitude.altitudeConfidence = AltitudeConfidence_unavailable;
