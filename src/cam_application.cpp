@@ -175,7 +175,9 @@ namespace v2x
 
     CoopAwareness_t &cam = message->cam;
 
-    cam.generationDeltaTime = std::chrono::duration_cast<std::chrono::milliseconds>(cam_interval_).count();
+    // Set GenerationTime
+    RCLCPP_INFO(node_->get_logger(), "[CpmApplication::send] %ld", gdt_timestamp_);
+    cam.generationDeltaTime = gdt_timestamp_;
 
     BasicContainer_t &basic_container = cam.camParameters.basicContainer;
     basic_container.stationType = StationType_passengerCar;

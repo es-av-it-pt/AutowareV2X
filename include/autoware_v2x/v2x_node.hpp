@@ -45,8 +45,6 @@ namespace v2x
     rclcpp::Client<autoware_adapi_v1_msgs::srv::GetVehicleDimensions>::SharedPtr get_vehicle_dimensions_;
     rclcpp::Publisher<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr cpm_objects_pub_;
     rclcpp::Publisher<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr cpm_sender_pub_;
-    rclcpp::Publisher<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr cam_objects_pub_;
-    rclcpp::Publisher<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr cam_sender_pub_;
 
     double pos_lat_;
     double pos_lon_;

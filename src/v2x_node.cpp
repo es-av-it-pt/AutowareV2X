@@ -54,7 +54,7 @@ namespace v2x
     // cpm_sender_pub_ = create_publisher<autoware_auto_perception_msgs::msg::PredictedObjects>("/v2x/cpm/sender", rclcpp::QoS{10});
 
     // Declare Parameters
-    this->declare_parameter<std::string>("network_interface", "v2x_testing");
+    this->declare_parameter<std::string>("network_interface", "vmnet1");
     this->declare_parameter<bool>("is_sender", true);
 
     // Launch V2XApp in a new thread
