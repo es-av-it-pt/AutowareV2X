@@ -40,12 +40,10 @@ namespace v2x
     ego_(),
     positionConfidenceEllipse_(),
     velocityReport_(),
-    gearReport_(),
-    steeringReport_(),
+    vehicleStatus_(),
     generationTime_(0),
     updating_velocity_report_(false),
-    updating_gear_report_(false),
-    updating_steering_report_(false),
+    updating_vehicle_status_(false),
     sending_(false),
     is_sender_(is_sender),
     reflect_packet_(false),
@@ -143,30 +141,17 @@ namespace v2x
     updating_velocity_report_ = false;
   }
 
-  void CamApplication::updateGearReport(const autoware_auto_vehicle_msgs::msg::GearReport::ConstSharedPtr msg) {
-    if (updating_gear_report_) {
+  void CamApplication::updateVehicleStatus(const autoware_adapi_v1_msgs::msg::VehicleStatus::ConstSharedPtr msg) {
+    if (updating_vehicle_status_) {
       return;
     }
 
-    updating_gear_report_ = true;
+    updating_vehicle_status_ = true;
 
-    gearReport_.stamp = msg->stamp;
-    gearReport_.report = msg->report;
+    vehicleStatus_.gear = msg->gear.status;
+    vehicleStatus_.steering_tire_angle = msg->steering_tire_angle;
 
-    updating_gear_report_ = false;
-  }
-
-  void CamApplication::updateSteeringReport(const autoware_auto_vehicle_msgs::msg::SteeringReport::ConstSharedPtr msg) {
-    if (updating_steering_report_) {
-      return;
-    }
-
-    updating_steering_report_ = true;
-
-    steeringReport_.stamp = msg->stamp;
-    steeringReport_.steering_tire_angle = msg->steering_tire_angle;
-
-    updating_steering_report_ = false;
+    updating_vehicle_status_ = false;
   }
 
   void CamApplication::send() {
@@ -262,27 +247,25 @@ namespace v2x
     float lateral_velocity = velocityReport_.lateral_velocity;
     float longitudinal_velocity = velocityReport_.longitudinal_velocity;
     float longitudinal_acceleration = std::lround(velocityReport_.longitudinal_acceleration * 100);
-    uint8_t gearStatus = gearReport_.report;
-    float steering_tire_angle = steeringReport_.steering_tire_angle;
+    uint8_t gearStatus = vehicleStatus_.gear;
+    float steering_tire_angle = vehicleStatus_.steering_tire_angle;
 
     long speed = std::lround(std::sqrt(std::pow(longitudinal_velocity, 2) + std::pow(lateral_velocity, 2)) * 100);
     if (0 <= speed && speed <= 16382) bvc.speed.speedValue = speed;
     else bvc.speed.speedValue = SpeedValue_unavailable;
 
-    if ((gearStatus >= 2 && gearStatus <= 19) || gearStatus == 23 || gearStatus == 24)
+    if (gearStatus == 2 || gearStatus == 5)
       bvc.driveDirection = DriveDirection_forward;
-    else if (gearStatus == 20 || gearStatus == 21)
+    else if (gearStatus == 3)
       bvc.driveDirection = DriveDirection_backward;
     else
       bvc.driveDirection = DriveDirection_unavailable;
 
     long vehicleLength = std::lround((vehicleDimensions_.front_overhang + vehicleDimensions_.wheel_base + vehicleDimensions_.rear_overhang) * 10);
-    RCLCPP_INFO(node_->get_logger(), "LENGTH: front_overhang: %f, wheel_base: %f, rear_overhang: %f, total: %ld", vehicleDimensions_.front_overhang, vehicleDimensions_.wheel_base, vehicleDimensions_.rear_overhang, vehicleLength);
     if (1 <= vehicleLength && vehicleLength <= 1022) bvc.vehicleLength.vehicleLengthValue = vehicleLength;
     else bvc.vehicleLength.vehicleLengthValue = VehicleLengthValue_unavailable;
 
     long vehicleWidth = std::lround((vehicleDimensions_.left_overhang + vehicleDimensions_.wheel_tread + vehicleDimensions_.right_overhang) * 10);
-    RCLCPP_INFO(node_->get_logger(), "WIDTH: left_overhang: %f, wheel_tread: %f, right_overhang: %f, total: %ld", vehicleDimensions_.left_overhang, vehicleDimensions_.wheel_tread, vehicleDimensions_.right_overhang, vehicleWidth);
     if (1 <= vehicleWidth && vehicleWidth <= 61) bvc.vehicleWidth = vehicleWidth;
     else bvc.vehicleWidth = VehicleWidth_unavailable;
 

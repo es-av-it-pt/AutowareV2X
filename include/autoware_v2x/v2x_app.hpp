@@ -5,10 +5,9 @@
 #include "std_msgs/msg/string.hpp"
 #include "autoware_auto_perception_msgs/msg/predicted_objects.hpp"
 #include "autoware_auto_vehicle_msgs/msg/velocity_report.hpp"
-#include "autoware_auto_vehicle_msgs/msg/gear_report.hpp"
-#include "autoware_auto_vehicle_msgs/msg/steering_report.hpp"
 #include "autoware_adapi_v1_msgs/srv/get_vehicle_dimensions.hpp"
 #include "autoware_adapi_v1_msgs/msg/vehicle_dimensions.hpp"
+#include "autoware_adapi_v1_msgs/msg/vehicle_status.hpp"
 #include "tf2_msgs/msg/tf_message.hpp"
 #include <boost/asio/io_service.hpp>
 #include "autoware_v2x/cpm_application.hpp"
@@ -32,8 +31,7 @@ namespace v2x
     void objectsCallback(const autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr);
     void setVehicleDimensions(const autoware_adapi_v1_msgs::msg::VehicleDimensions &);
     void velocityReportCallback(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr);
-    void gearReportCallback(const autoware_auto_vehicle_msgs::msg::GearReport::ConstSharedPtr);
-    void steeringReportCallback(const autoware_auto_vehicle_msgs::msg::SteeringReport::ConstSharedPtr);
+    void vehicleStatusCallback(const autoware_adapi_v1_msgs::msg::VehicleStatus::ConstSharedPtr);
     void tfCallback(const tf2_msgs::msg::TFMessage::ConstSharedPtr);
 
     CpmApplication *cp;
@@ -49,10 +47,8 @@ namespace v2x
     int tf_interval_;
     bool velocity_report_received_;
     int velocity_report_interval_;
-    bool gear_report_received_;
-    int gear_report_interval_;
-    bool steering_report_received_;
-    int  steering_report_interval_;
+    bool vehicle_status_received_;
+    int vehicle_status_interval_;
     bool vehicle_dimensions_set_;
     bool cp_started_;
     bool cam_started_;

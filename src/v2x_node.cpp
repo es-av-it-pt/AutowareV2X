@@ -41,8 +41,7 @@ namespace v2x
 
     // Topic subscriptions for CAMApplication
     velocity_report_sub_ = this->create_subscription<autoware_auto_vehicle_msgs::msg::VelocityReport>("/vehicle/status/velocity_status", 10, std::bind(&V2XNode::velocityReportCallback, this, _1));
-    gear_report_sub_ = this->create_subscription<autoware_auto_vehicle_msgs::msg::GearReport>("/vehicle/status/gear_status", 10, std::bind(&V2XNode::gearReportCallback, this, _1));
-    steering_report_sub_ = this->create_subscription<autoware_auto_vehicle_msgs::msg::SteeringReport>("/vehicle/status/steering_status", 10, std::bind(&V2XNode::steeringReportCallback, this, _1));
+    vehicle_status_sub_ = this->create_subscription<autoware_adapi_v1_msgs::msg::VehicleStatus>("/api/vehicle/status", 10, std::bind(&V2XNode::vehicleStatucCallback, this, _1));
     get_vehicle_dimensions_ = this->create_client<autoware_adapi_v1_msgs::srv::GetVehicleDimensions>("/api/vehicle/dimensions");
     if (get_vehicle_dimensions_->wait_for_service(std::chrono::seconds(60))) {
       RCLCPP_INFO(get_logger(), "[V2XNode::getVehicleDimensions] Service /api/vehicle/dimensions is now available.");
@@ -186,12 +185,8 @@ namespace v2x
     app->velocityReportCallback(msg);
   }
 
-  void V2XNode::gearReportCallback(const autoware_auto_vehicle_msgs::msg::GearReport::ConstSharedPtr msg) {
-    app->gearReportCallback(msg);
-  }
-
-  void V2XNode::steeringReportCallback(const autoware_auto_vehicle_msgs::msg::SteeringReport::ConstSharedPtr msg) {
-    app->steeringReportCallback(msg);
+  void V2XNode::vehicleStatucCallback(const autoware_adapi_v1_msgs::msg::VehicleStatus::ConstSharedPtr msg) {
+    app->vehicleStatusCallback(msg);
   }
 
   void V2XNode::getVehicleDimensions() {

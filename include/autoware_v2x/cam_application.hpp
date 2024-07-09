@@ -6,9 +6,8 @@
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include "autoware_auto_vehicle_msgs/msg/velocity_report.hpp"
-#include "autoware_auto_vehicle_msgs/msg/gear_report.hpp"
-#include "autoware_auto_vehicle_msgs/msg/steering_report.hpp"
 #include "autoware_adapi_v1_msgs/msg/vehicle_dimensions.hpp"
+#include "autoware_adapi_v1_msgs/msg/vehicle_status.hpp"
 #include "autoware_v2x/positioning.hpp"
 #include <vanetza/asn1/cam.hpp>
 
@@ -28,8 +27,7 @@ public:
   void updateHeading(double *);
   void setVehicleDimensions(const autoware_adapi_v1_msgs::msg::VehicleDimensions &);
   void updateVelocityReport(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr);
-  void updateGearReport(const autoware_auto_vehicle_msgs::msg::GearReport::ConstSharedPtr);
-  void updateSteeringReport(const autoware_auto_vehicle_msgs::msg::SteeringReport::ConstSharedPtr);
+  void updateVehicleStatus(const autoware_adapi_v1_msgs::msg::VehicleStatus::ConstSharedPtr);
   void send();
 
 private:
@@ -126,17 +124,11 @@ private:
   };
   VelocityReport velocityReport_;
 
-  struct GearReport {
-    rclcpp::Time stamp;
-    uint8_t report;
-  };
-  GearReport gearReport_;
-
-  struct SteeringReport {
-    rclcpp::Time stamp;
+  struct VehicleStatus {
+    uint8_t gear;
     float steering_tire_angle;
   };
-  SteeringReport steeringReport_;
+  VehicleStatus vehicleStatus_;
 
   int generationTime_;
   long gdt_timestamp_;
@@ -144,8 +136,7 @@ private:
   double objectConfidenceThreshold_;
 
   bool updating_velocity_report_;
-  bool updating_gear_report_;
-  bool updating_steering_report_;
+  bool updating_vehicle_status_;
   bool sending_;
   bool is_sender_;
   bool reflect_packet_;

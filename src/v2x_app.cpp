@@ -66,23 +66,14 @@ namespace v2x
     }
   }
 
-  void V2XApp::gearReportCallback(const autoware_auto_vehicle_msgs::msg::GearReport::ConstSharedPtr msg) {
-    if (!gear_report_received_) {
-      RCLCPP_WARN(node_->get_logger(), "[V2XApp::gearReportCallback] GearReport not received yet");
+  void V2XApp::vehicleStatusCallback(const autoware_adapi_v1_msgs::msg::VehicleStatus::ConstSharedPtr msg) {
+    if (!vehicle_status_received_) {
+      RCLCPP_WARN(node_->get_logger(), "[V2XApp::vehicleStatusCallback] VehicleStatus not received yet");
     }
-    if (gear_report_received_ && cam_started_) {
-      cam->updateGearReport(msg);
+    if (vehicle_status_received_ && cam_started_) {
+      cam->updateVehicleStatus(msg);
     }
   }
-
-void V2XApp::steeringReportCallback(const autoware_auto_vehicle_msgs::msg::SteeringReport::ConstSharedPtr msg) {
-  if (!steering_report_received_) {
-    RCLCPP_WARN(node_->get_logger(), "[V2XApp::gearReportCallback] SteeringReport not received yet");
-  }
-  if (steering_report_received_ && cam_started_) {
-    cam->updateSteeringReport(msg);
-  }
-}
 
   void V2XApp::tfCallback(const tf2_msgs::msg::TFMessage::ConstSharedPtr msg) {
 
