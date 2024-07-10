@@ -32,7 +32,7 @@ using namespace vanetza;
 using namespace std::chrono;
 
 namespace v2x {
-  CpmApplication::CpmApplication(V2XNode *node, Runtime &rt, bool is_sender) :
+  CpmApplication::CpmApplication(V2XNode *node, Runtime &rt, bool is_sender) :     
     node_(node),
     runtime_(rt),
     ego_(),
@@ -156,7 +156,7 @@ namespace v2x {
           x1 = x1 / 100.0;
           y1 = y1 / 100.0;
           object.position_x = x_mgrs + (cos(orientation) * x1 - sin(orientation) * y1);
-          object.position_y = y_mgrs + (sin(orientation) * x1 + cos(orientation) * y1);
+          object.position_y = y_mgrs + (sin(orientation) * x1 + cos(orientation) * y1);          
           object.shape_x = poc->list.array[i]->planarObjectDimension2->value;
           object.shape_y = poc->list.array[i]->planarObjectDimension1->value;
           object.shape_z = poc->list.array[i]->verticalObjectDimension->value;
@@ -236,7 +236,7 @@ namespace v2x {
         });
 
         if (found_object == objectsList.end()) {
-
+          
         } else {
           found_object->to_send = true;
         }
@@ -317,7 +317,7 @@ namespace v2x {
             ++cpm_object_id_;
 
           } else {
-
+            
             // Object was already in internal memory
 
             // Object belongs to class person or animal
@@ -327,7 +327,7 @@ namespace v2x {
                 found_object->to_send = true;
                 found_object->to_send_trigger = 5;
               }
-
+              
               // Object has not been included in a CPM in the past 500 ms.
               if (runtime_.now().time_since_epoch().count() - found_object->timestamp.time_since_epoch().count() > 500000) {
                 // Include all objects of class person or animal in the current CPM
@@ -349,7 +349,7 @@ namespace v2x {
                 found_object->to_send = true;
                 found_object->to_send_trigger = 1;
               } else {
-
+                
               }
 
               // Absolute speed changed by more than 0.5 m/s
@@ -359,7 +359,7 @@ namespace v2x {
               if (speed > 0.5) {
                 found_object->to_send = true;
                 found_object->to_send_trigger = 2;
-              }
+              } 
 
               // Orientation of speed vector changed by more than 4 degrees
               double twist_angular_x_diff = (obj.kinematics.initial_twist_with_covariance.twist.angular.x - found_object->twist_angular_x) * 180 / M_PI;
@@ -434,7 +434,7 @@ namespace v2x {
     } else {
       RCLCPP_INFO(node_->get_logger(), "[objectsList] %d,,,,", cpm_num);
     }
-
+    
     // RCLCPP_INFO(node_->get_logger(), "------------------------");
   }
 
@@ -445,7 +445,7 @@ namespace v2x {
       sending_ = true;
 
       printObjectsList(cpm_num_);
-
+      
       // RCLCPP_INFO(node_->get_logger(), "[CpmApplication::send] Sending CPM...");
 
       vanetza::asn1::Cpm message;
@@ -578,7 +578,7 @@ namespace v2x {
       RCLCPP_INFO(node_->get_logger(), "[CpmApplication::send] Sending CPM with %d objects", perceivedObjectsCount);
 
       insertCpmToCpmTable(message, (char*) "cpm_sent");
-
+      
       std::unique_ptr<geonet::DownPacket> payload{new geonet::DownPacket()};
 
       payload->layer(OsiLayer::Application) = std::move(message);
@@ -618,7 +618,7 @@ namespace v2x {
     }
 
     char* sql_command;
-
+    
     sql_command = (char*) "create table if not exists cpm_sent(id INTEGER PRIMARY KEY, timestamp BIGINT, perceivedObjectCount INTEGER);";
 
     ret = sqlite3_exec(db, sql_command, NULL, NULL, &err);
@@ -661,7 +661,7 @@ namespace v2x {
     }
 
     std::stringstream sql_command;
-
+    
     sql_command << "insert into " << table_name << " (timestamp, perceivedObjectCount) values (" << timestamp << ", " << perceivedObjectCount << ");";
 
     ret = sqlite3_exec(db, sql_command.str().c_str(), NULL, NULL, &err);

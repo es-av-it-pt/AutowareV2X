@@ -128,7 +128,7 @@ namespace v2x
       cam->updateMGRS(&x, &y);
       cam->updateRP(&lat, &lon, &z);
       cam->updateHeading(&yaw);
-      cam->updateGenerationTime(&gdt, &timestamp_msec);
+      cam->updateGenerationDeltaTime(&gdt, &timestamp_msec);
     }
   }
 

@@ -41,14 +41,13 @@ namespace v2x
     positionConfidenceEllipse_(),
     velocityReport_(),
     vehicleStatus_(),
-    generationTime_(0),
+    generationDeltaTime_(0),
     updating_velocity_report_(false),
     updating_vehicle_status_(false),
     sending_(false),
     is_sender_(is_sender),
     reflect_packet_(false),
     objectConfidenceThreshold_(0.0),
-    include_all_persons_and_animals_(false),
     cam_num_(0),
     received_cam_num_(0),
     use_dynamic_generation_rules_(false)
@@ -96,8 +95,8 @@ namespace v2x
     positionConfidenceEllipse_.y.insert(*lon);
   }
 
-  void CamApplication::updateGenerationTime(int *gdt, long *gdt_timestamp) {
-    generationTime_ = *gdt;
+  void CamApplication::updateGenerationDeltaTime(int *gdt, long *gdt_timestamp) {
+    generationDeltaTime_ = *gdt;
     gdt_timestamp_ = *gdt_timestamp; // ETSI-epoch milliseconds timestamp
   }
 
@@ -175,9 +174,8 @@ namespace v2x
 
     CoopAwareness_t &cam = message->cam;
 
-    // Set GenerationTime
     RCLCPP_INFO(node_->get_logger(), "[CpmApplication::send] %ld", gdt_timestamp_);
-    cam.generationDeltaTime = gdt_timestamp_;
+    cam.generationDeltaTime = generationDeltaTime_;
 
     BasicContainer_t &basic_container = cam.camParameters.basicContainer;
     basic_container.stationType = StationType_passengerCar;

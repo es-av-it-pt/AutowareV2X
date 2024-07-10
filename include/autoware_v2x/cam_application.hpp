@@ -23,7 +23,7 @@ public:
   void set_interval(vanetza::Clock::duration);
   void updateMGRS(double *, double *);
   void updateRP(double *, double *, double *);
-  void updateGenerationTime(int *, long *);
+  void updateGenerationDeltaTime(int *, long *);
   void updateHeading(double *);
   void setVehicleDimensions(const autoware_adapi_v1_msgs::msg::VehicleDimensions &);
   void updateVelocityReport(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr);
@@ -130,7 +130,7 @@ private:
   };
   VehicleStatus vehicleStatus_;
 
-  int generationTime_;
+  int generationDeltaTime_;
   long gdt_timestamp_;
 
   double objectConfidenceThreshold_;
@@ -140,7 +140,6 @@ private:
   bool sending_;
   bool is_sender_;
   bool reflect_packet_;
-  bool include_all_persons_and_animals_;
 
   int cam_num_;
   int received_cam_num_;
