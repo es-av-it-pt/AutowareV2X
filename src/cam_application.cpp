@@ -282,7 +282,7 @@ namespace v2x
     if (-32766 <= heading_rate_deg && heading_rate_deg <= 32766) bvc.yawRate.yawRateValue = heading_rate_deg;
     else bvc.yawRate.yawRateValue = YawRateValue_unavailable;
 
-    // UNAVAILABLE VALUES FOR TESTING
+    // UNAVAILABLE VALUES
     basic_container.referencePosition.altitude.altitudeConfidence = AltitudeConfidence_unavailable;
     // ------------------------------
     bvc.heading.headingConfidence = HeadingConfidence_unavailable;
