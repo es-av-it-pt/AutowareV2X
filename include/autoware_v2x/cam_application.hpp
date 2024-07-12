@@ -141,6 +141,7 @@ private:
   bool is_sender_;
   bool reflect_packet_;
 
+  unsigned long stationId_;
   int cam_num_;
   int received_cam_num_;
 

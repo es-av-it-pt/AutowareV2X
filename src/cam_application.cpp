@@ -16,6 +16,7 @@
 #include <iostream>
 #include <sstream>
 #include <exception>
+#include <random>
 #include <GeographicLib/UTMUPS.hpp>
 #include <GeographicLib/MGRS.hpp>
 #include <string>
@@ -55,6 +56,12 @@ namespace v2x
     RCLCPP_INFO(node_->get_logger(), "CamApplication started. is_sender: %d", is_sender_);
     set_interval(milliseconds(100));
     //createTables();
+
+    // Generate ID for this station
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<unsigned long> dis(0, 4294967295);
+    stationId_ = dis(gen);
   }
 
   void CamApplication::set_interval(Clock::duration interval) {
@@ -170,7 +177,7 @@ namespace v2x
     ItsPduHeader_t &header = message->header;
     header.protocolVersion = 2;
     header.messageID = ItsPduHeader__messageID_cam;
-    header.stationID = cam_num_;
+    header.stationID = stationId_;
 
     CoopAwareness_t &cam = message->cam;
 
@@ -293,7 +300,7 @@ namespace v2x
     bvc.yawRate.yawRateConfidence = YawRateConfidence_unavailable;
     // ------------------------------
 
-    RCLCPP_INFO(node_->get_logger(), "[CamApplication::send] Sending CAM");
+    RCLCPP_INFO(node_->get_logger(), "[CamApplication::send] Sending CAM from station with ID %ld", stationId_);
     std::unique_ptr<geonet::DownPacket> payload{new geonet::DownPacket()};
     payload->layer(OsiLayer::Application) = std::move(message);
 
