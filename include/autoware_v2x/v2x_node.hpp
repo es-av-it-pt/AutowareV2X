@@ -19,6 +19,8 @@
 #include "autoware_v2x/router_context.hpp"
 #include <fstream>
 
+#include <etsi_its_cam_ts_msgs/msg/cam.hpp>
+
 namespace v2x
 {
   class V2XNode : public rclcpp::Node
@@ -28,13 +30,14 @@ namespace v2x
     V2XApp *app;
     void publishObjects(std::vector<CpmApplication::Object> *, int cpm_num);
     void publishCpmSenderObject(double, double, double);
+    void publishReceivedCam(etsi_its_cam_ts_msgs::msg::CAM &);
 
     std::ofstream latency_log_file;
 
   private:
     void objectsCallback(const autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr msg);
     void velocityReportCallback(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr msg);
-    void vehicleStatucCallback(const autoware_adapi_v1_msgs::msg::VehicleStatus::ConstSharedPtr msg);
+    void vehicleStatusCallback(const autoware_adapi_v1_msgs::msg::VehicleStatus::ConstSharedPtr msg);
     void getVehicleDimensions();
     void tfCallback(const tf2_msgs::msg::TFMessage::ConstSharedPtr msg);
 
@@ -45,6 +48,7 @@ namespace v2x
     rclcpp::Client<autoware_adapi_v1_msgs::srv::GetVehicleDimensions>::SharedPtr get_vehicle_dimensions_;
     rclcpp::Publisher<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr cpm_objects_pub_;
     rclcpp::Publisher<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr cpm_sender_pub_;
+    rclcpp::Publisher<etsi_its_cam_ts_msgs::msg::CAM>::SharedPtr cam_rec_pub_;
 
     double pos_lat_;
     double pos_lon_;

@@ -23,6 +23,8 @@ option(BUILD_SHARED_LIBS "Build shared libraries" ON)
 find_package(Vanetza REQUIRED)
 find_package(GeographicLib 1.37 REQUIRED)
 find_package(Boost COMPONENTS thread REQUIRED)
+find_package(etsi_its_cam_ts_coding REQUIRED)
+find_package(etsi_its_cam_ts_conversion REQUIRED)
 ament_auto_find_build_dependencies()
 find_package(std_msgs REQUIRED)
 
@@ -46,7 +48,7 @@ ament_auto_add_library(autoware_v2x SHARED
   src/security.cpp
 )
 
-target_link_libraries(autoware_v2x Vanetza::vanetza ${GeographicLib_LIBRARIES} Boost::thread sqlite3)
+target_link_libraries(autoware_v2x Vanetza::vanetza ${GeographicLib_LIBRARIES} Boost::thread sqlite3 etsi_its_cam_ts_coding::etsi_its_cam_ts_coding etsi_its_cam_ts_conversion::etsi_its_cam_ts_conversion)
 
 rclcpp_components_register_node(autoware_v2x
   PLUGIN "v2x::V2XNode"

@@ -1,4 +1,4 @@
 /**:
   ros__parameters:
-    network_interface: "wlp4s0"
+    network_interface: "v2x_testing"
     is_sender: true

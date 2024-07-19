@@ -21,6 +21,10 @@
 #include <GeographicLib/MGRS.hpp>
 #include <string>
 
+#include <etsi_its_cam_ts_msgs/msg/cam.hpp>
+#include <etsi_its_cam_ts_coding/cam_ts_CAM.h>
+#include <etsi_its_cam_ts_conversion/convertCAM.h>
+
 #include <boost/units/cmath.hpp>
 #include <boost/units/systems/si/prefixes.hpp>
 
@@ -83,9 +87,64 @@ namespace v2x
     return btp::ports::CAM;
   }
 
-  void CamApplication::indicate(const Application::DataIndication &, Application::UpPacketPtr)
+  void CamApplication::indicate(const Application::DataIndication &indication, Application::UpPacketPtr packet)
   {
-    // TODO: implement
+    asn1::PacketVisitor<asn1::Cam> visitor;
+    std::shared_ptr<const asn1::Cam> rec_cam_ptr = boost::apply_visitor(visitor, *packet);
+
+    if (!rec_cam_ptr) {
+      RCLCPP_INFO(node_->get_logger(), "[CamApplication::indicate] Received invalid CAM");
+      return;
+    }
+
+    asn1::Cam rec_cam = *rec_cam_ptr;
+    RCLCPP_INFO(node_->get_logger(), "[CamApplication::indicate] Received CAM from station with ID #%ld", rec_cam->header.stationID);
+    std::chrono::milliseconds now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+
+    cam_ts_CAM_t ts_cam;
+
+    cam_ts_ItsPduHeader_t &header = ts_cam.header;
+    header.protocolVersion = rec_cam->header.protocolVersion;
+    header.messageId = rec_cam->header.messageID;
+    header.stationId = rec_cam->header.stationID;
+
+    cam_ts_CamPayload_t &coopAwareness = ts_cam.cam;
+    coopAwareness.generationDeltaTime = rec_cam->cam.generationDeltaTime;
+
+    cam_ts_BasicContainer_t &basic_container = coopAwareness.camParameters.basicContainer;
+    BasicContainer_t &rec_basic_container = rec_cam->cam.camParameters.basicContainer;
+    basic_container.stationType = rec_basic_container.stationType;
+    basic_container.referencePosition.latitude = rec_basic_container.referencePosition.latitude;
+    basic_container.referencePosition.longitude = rec_basic_container.referencePosition.longitude;
+    basic_container.referencePosition.altitude.altitudeValue = rec_basic_container.referencePosition.altitude.altitudeValue;
+    basic_container.referencePosition.altitude.altitudeConfidence = rec_basic_container.referencePosition.altitude.altitudeConfidence;
+    basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisLength = rec_basic_container.referencePosition.positionConfidenceEllipse.semiMajorConfidence;
+    basic_container.referencePosition.positionConfidenceEllipse.semiMinorAxisLength = rec_basic_container.referencePosition.positionConfidenceEllipse.semiMinorConfidence;
+    basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisOrientation = rec_basic_container.referencePosition.positionConfidenceEllipse.semiMajorOrientation;
+
+    cam_ts_BasicVehicleContainerHighFrequency_t &bvc = coopAwareness.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency;
+    coopAwareness.camParameters.highFrequencyContainer.present = cam_ts_HighFrequencyContainer_PR_basicVehicleContainerHighFrequency;
+    BasicVehicleContainerHighFrequency_t &rec_bvc = rec_cam->cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency;
+    bvc.heading.headingValue = rec_bvc.heading.headingValue;
+    bvc.heading.headingConfidence = rec_bvc.heading.headingConfidence;
+    bvc.speed.speedValue = rec_bvc.speed.speedValue;
+    bvc.speed.speedConfidence = rec_bvc.speed.speedConfidence;
+    bvc.driveDirection = rec_bvc.driveDirection;
+    bvc.vehicleLength.vehicleLengthValue = rec_bvc.vehicleLength.vehicleLengthValue;
+    bvc.vehicleLength.vehicleLengthConfidenceIndication = rec_bvc.vehicleLength.vehicleLengthConfidenceIndication;
+    bvc.vehicleWidth = rec_bvc.vehicleWidth;
+    bvc.longitudinalAcceleration.value = rec_bvc.longitudinalAcceleration.longitudinalAccelerationValue;
+    bvc.longitudinalAcceleration.confidence = rec_bvc.longitudinalAcceleration.longitudinalAccelerationConfidence;
+    bvc.curvature.curvatureValue = rec_bvc.curvature.curvatureValue;
+    bvc.curvature.curvatureConfidence = rec_bvc.curvature.curvatureConfidence;
+    bvc.curvatureCalculationMode = rec_bvc.curvatureCalculationMode;
+    bvc.yawRate.yawRateValue = rec_bvc.yawRate.yawRateValue;
+    bvc.yawRate.yawRateConfidence = rec_bvc.yawRate.yawRateConfidence;
+
+    etsi_its_cam_ts_msgs::msg::CAM ros_msg;
+    etsi_its_cam_ts_conversion::toRos_CAM(ts_cam, ros_msg);
+
+    node_->publishReceivedCam(ros_msg);
   }
 
   void CamApplication::updateMGRS(double *x, double *y) {
@@ -136,7 +195,8 @@ namespace v2x
       RCLCPP_WARN(node_->get_logger(), "[CamApplication::updateVelocityReport] deltaTime is 0");
       return;
     }
-    float longitudinal_acceleration = (msg->longitudinal_velocity - velocityReport_.longitudinal_velocity) / dt;
+    float longitudinal_acceleration;
+    if (dt != 0) longitudinal_acceleration = (msg->longitudinal_velocity - velocityReport_.longitudinal_velocity) / dt;
 
     velocityReport_.stamp = msg->header.stamp;
     velocityReport_.heading_rate = msg->heading_rate;
@@ -170,8 +230,6 @@ namespace v2x
 
     sending_ = true;
 
-    RCLCPP_INFO(node_->get_logger(), "[CamApplication::send] cam_num: %d", cam_num_);
-
     vanetza::asn1::Cam message;
 
     ItsPduHeader_t &header = message->header;
@@ -181,7 +239,6 @@ namespace v2x
 
     CoopAwareness_t &cam = message->cam;
 
-    RCLCPP_INFO(node_->get_logger(), "[CpmApplication::send] %ld", gdt_timestamp_);
     cam.generationDeltaTime = generationDeltaTime_;
 
     BasicContainer_t &basic_container = cam.camParameters.basicContainer;
@@ -314,6 +371,8 @@ namespace v2x
     if (!confirm.accepted()) {
       throw std::runtime_error("[CamApplication::send] CAM application data request failed");
     }
+
+    RCLCPP_INFO(node_->get_logger(), "[CamApplication::send] Successfully sent");
 
     sending_ = false;
 
