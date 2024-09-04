@@ -58,6 +58,7 @@ namespace v2x
     // Declare Parameters
     this->declare_parameter<std::string>("network_interface", "v2x_testing");
     this->declare_parameter<bool>("is_sender", true);
+    this->declare_parameter<std::string>("security", "none");
 
     // Launch V2XApp in a new thread
     app = new V2XApp(this);

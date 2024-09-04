@@ -24,6 +24,7 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 
 namespace gn = vanetza::geonet;
+namespace po = boost::program_options;
 
 using namespace vanetza;
 using namespace std::chrono;
@@ -160,7 +161,29 @@ namespace v2x
     // Create raw socket on device and LinkLayer object
     auto link_layer =  create_link_layer(io_service, device, "ethernet");
     auto positioning = create_position_provider(io_service, trigger.runtime());
-    auto security = create_security_entity(trigger.runtime(), *positioning);
+
+    po::variables_map security_options;
+    std::string entity;
+    std::string certificate;
+    std::string certificate_key;
+    std::vector<std::string> certificate_chain;
+    // Grab the values from the node parameters
+    node_->get_parameter("security", entity);
+    security_options.insert(std::make_pair("security", po::variable_value(entity, false)));
+    if (node_->has_parameter("certificate")) {
+      node_->get_parameter("certificate", certificate);
+      security_options.insert(std::make_pair("certificate", po::variable_value(certificate, false)));
+    }
+    if (node_->has_parameter("certificate-key")) {
+      node_->get_parameter("certificate-key", certificate_key);
+      security_options.insert(std::make_pair("certificate-key", po::variable_value(certificate_key, false)));
+    }
+    if (node_->has_parameter("certificate-chain")) {
+      node_->get_parameter("certificate-chain", certificate_chain);
+      security_options.insert(std::make_pair("certificate-chain", po::variable_value(certificate_chain, false)));
+    }
+    auto security = create_security_entity(security_options, trigger.runtime(), *positioning);
+
     RouterContext context(mib, trigger, *positioning, security.get());
 
     context.set_link_layer(link_layer.get());

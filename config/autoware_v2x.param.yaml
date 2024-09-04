@@ -2,3 +2,8 @@
   ros__parameters:
     network_interface: "v2x_testing"
     is_sender: true
+    security: "none"
+    certificate: ""
+    certificate-key: ""
+    certificate-chain:
+      - ""
