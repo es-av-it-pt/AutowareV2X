@@ -36,7 +36,7 @@ private:
 
   V2XNode *node_;
   vanetza::Runtime &runtime_;
-  vanetza::Clock::duration cam_interval_;
+  vanetza::Clock::duration cam_interval_{};
 
   struct VehicleDimensions {
     float wheel_radius;
@@ -77,17 +77,17 @@ private:
       return deque.size();
     }
 
-    double getMean() {
+    [[nodiscard]] double getMean() const {
       return this->mean;
     }
 
     using iterator = std::deque<double>::const_iterator;
 
-    iterator begin() const {
+    [[nodiscard]] iterator begin() const {
       return deque.begin();
     }
 
-    iterator end() const {
+    [[nodiscard]] iterator end() const {
       return deque.end();
     }
 
@@ -109,9 +109,9 @@ private:
     PositionsDeque x;
     PositionsDeque y;
 
-    double semiMajorConfidence;
-    double semiMinorConfidence;
-    double semiMajorOrientation;
+    double semiMajorConfidence{};
+    double semiMinorConfidence{};
+    double semiMajorOrientation{};
   };
   PositionConfidenceEllipse positionConfidenceEllipse_;
 
@@ -131,7 +131,7 @@ private:
   VehicleStatus vehicleStatus_;
 
   int generationDeltaTime_;
-  long gdt_timestamp_;
+  long gdt_timestamp_{};
 
   double objectConfidenceThreshold_;
 

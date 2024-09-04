@@ -1,6 +1,8 @@
 /**:
   ros__parameters:
+    link_layer: "ethernet"
     network_interface: "v2x_testing"
+    cube_ip: "127.0.0.1"
     is_sender: true
     security: "none"
     certificate: ""

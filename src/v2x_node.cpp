@@ -56,7 +56,9 @@ namespace v2x
     cam_rec_pub_ = create_publisher<etsi_its_cam_ts_msgs::msg::CAM>("/v2x/cam_ts/received", rclcpp::QoS{10});
 
     // Declare Parameters
+    this->declare_parameter<std::string>("link_layer", "cube-evk");
     this->declare_parameter<std::string>("network_interface", "v2x_testing");
+    this->declare_parameter<std::string>("cube_ip", "127.0.0.1");
     this->declare_parameter<bool>("is_sender", true);
     this->declare_parameter<std::string>("security", "none");
 

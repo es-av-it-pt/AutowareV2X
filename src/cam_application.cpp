@@ -30,9 +30,6 @@
 
 #include <sqlite3.h>
 
-#define _USE_MATH_DEFINES
-#include <math.h>
-
 using namespace vanetza;
 using namespace std::chrono;
 
@@ -41,24 +38,25 @@ namespace v2x
   CamApplication::CamApplication(V2XNode * node, Runtime & rt, bool is_sender)
   : node_(node),
     runtime_(rt),
+    cam_interval_(milliseconds(100)),
     vehicleDimensions_(),
     ego_(),
     positionConfidenceEllipse_(),
     velocityReport_(),
     vehicleStatus_(),
     generationDeltaTime_(0),
+    objectConfidenceThreshold_(0.0),
     updating_velocity_report_(false),
     updating_vehicle_status_(false),
     sending_(false),
     is_sender_(is_sender),
     reflect_packet_(false),
-    objectConfidenceThreshold_(0.0),
     cam_num_(0),
     received_cam_num_(0),
     use_dynamic_generation_rules_(false)
   {
     RCLCPP_INFO(node_->get_logger(), "CamApplication started. is_sender: %d", is_sender_);
-    set_interval(milliseconds(100));
+    set_interval(cam_interval_);
     //createTables();
 
     // Generate ID for this station
@@ -190,13 +188,12 @@ namespace v2x
     updating_velocity_report_ = true;
 
     rclcpp::Time msg_stamp(msg->header.stamp.sec, msg->header.stamp.nanosec);
-    float dt = msg_stamp.seconds() - velocityReport_.stamp.seconds();
+    double dt = msg_stamp.seconds() - velocityReport_.stamp.seconds();
     if (dt == 0) {
       RCLCPP_WARN(node_->get_logger(), "[CamApplication::updateVelocityReport] deltaTime is 0");
       return;
     }
-    float longitudinal_acceleration;
-    if (dt != 0) longitudinal_acceleration = (msg->longitudinal_velocity - velocityReport_.longitudinal_velocity) / dt;
+    float longitudinal_acceleration = (msg->longitudinal_velocity - velocityReport_.longitudinal_velocity) / dt;
 
     velocityReport_.stamp = msg->header.stamp;
     velocityReport_.heading_rate = msg->heading_rate;

@@ -139,6 +139,10 @@ namespace v2x
     boost::asio::io_service io_service;
     TimeTrigger trigger(io_service);
 
+    std::string link_layer_name;
+    node_->get_parameter("link_layer", link_layer_name);
+    RCLCPP_INFO(node_->get_logger(), "Link Layer: %s", link_layer_name.c_str());
+
     std::string network_interface;
     node_->get_parameter("network_interface", network_interface);
     RCLCPP_INFO(node_->get_logger(), "Network Interface: %s", network_interface.c_str());
@@ -158,8 +162,12 @@ namespace v2x
     mib.itsGnSecurity = false;
     mib.itsGnProtocolVersion = 1;
 
+    std::string cube_ip;
+    node_->get_parameter("cube_ip", cube_ip);
+    RCLCPP_INFO(node_->get_logger(), "CubeEVK IP: %s", cube_ip.c_str());
+
     // Create raw socket on device and LinkLayer object
-    auto link_layer =  create_link_layer(io_service, device, "ethernet");
+    auto link_layer =  create_link_layer(io_service, device, link_layer_name, cube_ip);
     auto positioning = create_position_provider(io_service, trigger.runtime());
 
     po::variables_map security_options;

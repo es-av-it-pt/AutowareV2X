@@ -27,9 +27,11 @@ find_package(etsi_its_cam_ts_coding REQUIRED)
 find_package(etsi_its_cam_ts_conversion REQUIRED)
 ament_auto_find_build_dependencies()
 find_package(std_msgs REQUIRED)
+find_package(Protobuf REQUIRED)
 
 include_directories(
   include
+  ${CMAKE_CURRENT_BINARY_DIR}/src
 )
 
 ament_auto_add_library(autoware_v2x SHARED
@@ -38,6 +40,7 @@ ament_auto_add_library(autoware_v2x SHARED
   src/application.cpp
   src/cpm_application.cpp
   src/cam_application.cpp
+  src/cube_evk_link.cpp
   src/ethernet_device.cpp
   src/link_layer.cpp
   src/raw_socket_link.cpp
@@ -48,7 +51,9 @@ ament_auto_add_library(autoware_v2x SHARED
   src/security.cpp
 )
 
-target_link_libraries(autoware_v2x Vanetza::vanetza ${GeographicLib_LIBRARIES} Boost::thread Boost::program_options sqlite3 etsi_its_cam_ts_coding::etsi_its_cam_ts_coding etsi_its_cam_ts_conversion::etsi_its_cam_ts_conversion)
+protobuf_generate(TARGET autoware_v2x PROTOS src/cube_evk_radio.proto)
+
+target_link_libraries(autoware_v2x Vanetza::vanetza ${GeographicLib_LIBRARIES} Boost::thread Boost::program_options sqlite3 etsi_its_cam_ts_coding::etsi_its_cam_ts_coding etsi_its_cam_ts_conversion::etsi_its_cam_ts_conversion protobuf::libprotobuf)
 
 rclcpp_components_register_node(autoware_v2x
   PLUGIN "v2x::V2XNode"
