@@ -46,8 +46,6 @@ namespace v2x
     vehicleStatus_(),
     generationDeltaTime_(0),
     objectConfidenceThreshold_(0.0),
-    updating_velocity_report_(false),
-    updating_vehicle_status_(false),
     sending_(false),
     is_sender_(is_sender),
     reflect_packet_(false),
@@ -181,12 +179,6 @@ namespace v2x
   }
 
   void CamApplication::updateVelocityReport(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr msg) {
-    if (updating_velocity_report_) {
-      return;
-    }
-
-    updating_velocity_report_ = true;
-
     rclcpp::Time msg_stamp(msg->header.stamp.sec, msg->header.stamp.nanosec);
     double dt = msg_stamp.seconds() - velocityReport_.stamp.seconds();
     if (dt == 0) {
@@ -200,21 +192,15 @@ namespace v2x
     velocityReport_.lateral_velocity = msg->lateral_velocity;
     velocityReport_.longitudinal_velocity = msg->longitudinal_velocity;
     velocityReport_.longitudinal_acceleration = longitudinal_acceleration;
-
-    updating_velocity_report_ = false;
   }
 
-  void CamApplication::updateVehicleStatus(const autoware_adapi_v1_msgs::msg::VehicleStatus::ConstSharedPtr msg) {
-    if (updating_vehicle_status_) {
-      return;
-    }
+  void CamApplication::updateGearReport(const autoware_auto_vehicle_msgs::msg::GearReport::ConstSharedPtr msg) {
+    rclcpp::Time msg_stamp(msg->stamp.sec, msg->stamp.nanosec);
+    vehicleStatus_.gear = msg->report;
+  }
 
-    updating_vehicle_status_ = true;
-
-    vehicleStatus_.gear = msg->gear.status;
+  void CamApplication::updateSteeringReport(const autoware_auto_vehicle_msgs::msg::SteeringReport::ConstSharedPtr msg) {
     vehicleStatus_.steering_tire_angle = msg->steering_tire_angle;
-
-    updating_vehicle_status_ = false;
   }
 
   void CamApplication::send() {
@@ -315,9 +301,9 @@ namespace v2x
     if (0 <= speed && speed <= 16382) bvc.speed.speedValue = speed;
     else bvc.speed.speedValue = SpeedValue_unavailable;
 
-    if (gearStatus == 2 || gearStatus == 5)
+    if ((gearStatus >= 2 && gearStatus <= 19) || (gearStatus == 23 || gearStatus == 24))
       bvc.driveDirection = DriveDirection_forward;
-    else if (gearStatus == 3)
+    else if (gearStatus == 20 || gearStatus == 21)
       bvc.driveDirection = DriveDirection_backward;
     else
       bvc.driveDirection = DriveDirection_unavailable;

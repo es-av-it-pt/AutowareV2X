@@ -59,22 +59,20 @@ namespace v2x
   }
 
   void V2XApp::velocityReportCallback(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr msg) {
-    if (!velocity_report_received_) {
-      RCLCPP_WARN(node_->get_logger(), "[V2XApp::velocityReportCallback] VelocityReport not received yet");
-    }
-    if (velocity_report_received_ && cam_started_) {
+    if (cam_started_)
       cam->updateVelocityReport(msg);
-    }
   }
 
-  void V2XApp::vehicleStatusCallback(const autoware_adapi_v1_msgs::msg::VehicleStatus::ConstSharedPtr msg) {
-    if (!vehicle_status_received_) {
-      RCLCPP_WARN(node_->get_logger(), "[V2XApp::vehicleStatusCallback] VehicleStatus not received yet");
-    }
-    if (vehicle_status_received_ && cam_started_) {
-      cam->updateVehicleStatus(msg);
-    }
+  void V2XApp::gearReportCallback(const autoware_auto_vehicle_msgs::msg::GearReport::ConstSharedPtr msg) {
+    if (cam_started_)
+      cam->updateGearReport(msg);
   }
+
+  void V2XApp::steeringReportCallback(const autoware_auto_vehicle_msgs::msg::SteeringReport::ConstSharedPtr msg) {
+    if (cam_started_)
+      cam->updateSteeringReport(msg);
+  }
+
 
   void V2XApp::tfCallback(const tf2_msgs::msg::TFMessage::ConstSharedPtr msg) {
 
@@ -191,6 +189,8 @@ namespace v2x
       security_options.insert(std::make_pair("certificate-chain", po::variable_value(certificate_chain, false)));
     }
     auto security = create_security_entity(security_options, trigger.runtime(), *positioning);
+
+    RCLCPP_INFO(node_->get_logger(), "Security layer: %s", entity == "certs" ? "Certificates" : "None");
 
     RouterContext context(mib, trigger, *positioning, security.get());
 

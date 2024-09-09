@@ -36,19 +36,22 @@ namespace v2x
   V2XNode::V2XNode(const rclcpp::NodeOptions &node_options) : rclcpp::Node("autoware_v2x_node", node_options) {
     using std::placeholders::_1;
 
+    int timeout = 60;
+    get_vehicle_dimensions_ = this->create_client<autoware_adapi_v1_msgs::srv::GetVehicleDimensions>("/api/vehicle/dimensions");
+    if (get_vehicle_dimensions_->wait_for_service(std::chrono::seconds(timeout))) {
+      RCLCPP_INFO(get_logger(), "[V2XNode::getVehicleDimensions] Service /api/vehicle/dimensions is now available.");
+      this->getVehicleDimensions();
+    } else {
+      RCLCPP_ERROR(get_logger(), "[V2XNode::getVehicleDimensions] Service /api/vehicle/dimensions is not available after waiting (timeout=%ds).", timeout);
+    }
+
     objects_sub_ = this->create_subscription<autoware_auto_perception_msgs::msg::PredictedObjects>("/perception/object_recognition/objects", 10, std::bind(&V2XNode::objectsCallback, this, _1));
     tf_sub_ = this->create_subscription<tf2_msgs::msg::TFMessage>("/tf", 10, std::bind(&V2XNode::tfCallback, this, _1));
 
     // Topic subscriptions for CAMApplication
     velocity_report_sub_ = this->create_subscription<autoware_auto_vehicle_msgs::msg::VelocityReport>("/vehicle/status/velocity_status", 10, std::bind(&V2XNode::velocityReportCallback, this, _1));
-    vehicle_status_sub_ = this->create_subscription<autoware_adapi_v1_msgs::msg::VehicleStatus>("/api/vehicle/status", 10, std::bind(&V2XNode::vehicleStatusCallback, this, _1));
-    get_vehicle_dimensions_ = this->create_client<autoware_adapi_v1_msgs::srv::GetVehicleDimensions>("/api/vehicle/dimensions");
-    if (get_vehicle_dimensions_->wait_for_service(std::chrono::seconds(60))) {
-      RCLCPP_INFO(get_logger(), "[V2XNode::getVehicleDimensions] Service /api/vehicle/dimensions is now available.");
-      this->getVehicleDimensions();
-    } else {
-      RCLCPP_ERROR(get_logger(), "[V2XNode::getVehicleDimensions] Service /api/vehicle/dimensions is not available after waiting (timeout=60s).");
-    }
+    gear_report_sub_ = this->create_subscription<autoware_auto_vehicle_msgs::msg::GearReport>("/vehicle/status/gear_status", 10, std::bind(&V2XNode::gearReportCallback, this, _1));
+    steering_report_sub_ = this->create_subscription<autoware_auto_vehicle_msgs::msg::SteeringReport>("/vehicle/status/steering_status", 10, std::bind(&V2XNode::steeringReportCallback, this, _1));
 
     cpm_objects_pub_ = create_publisher<autoware_auto_perception_msgs::msg::PredictedObjects>("/v2x/cpm/objects", rclcpp::QoS{10});
     // cpm_sender_pub_ = create_publisher<autoware_auto_perception_msgs::msg::PredictedObjects>("/v2x/cpm/sender", rclcpp::QoS{10});
@@ -195,8 +198,12 @@ namespace v2x
     app->velocityReportCallback(msg);
   }
 
-  void V2XNode::vehicleStatusCallback(const autoware_adapi_v1_msgs::msg::VehicleStatus::ConstSharedPtr msg) {
-    app->vehicleStatusCallback(msg);
+  void V2XNode::gearReportCallback(const autoware_auto_vehicle_msgs::msg::GearReport::ConstSharedPtr msg) {
+    app->gearReportCallback(msg);
+  }
+
+  void V2XNode::steeringReportCallback(const autoware_auto_vehicle_msgs::msg::SteeringReport::ConstSharedPtr msg) {
+    app->steeringReportCallback(msg);
   }
 
   void V2XNode::getVehicleDimensions() {
@@ -209,9 +216,11 @@ namespace v2x
        RCLCPP_INFO(get_logger(), "[V2XNode::getVehicleDimensions] Received response from /api/vehicle/dimensions");
        try {
          auto dimensions = response->dimensions;
-         if (dimensions.height == 0 || dimensions.wheel_base == 0 || dimensions.wheel_tread == 0)
+         if (dimensions.height == 0 || dimensions.wheel_base == 0 || dimensions.wheel_tread == 0) {
+           RCLCPP_INFO(get_logger(), "[V2XNode::getVehicleDimensions] Received vehicle dimensions are zero. Trying again...");
            this->getVehicleDimensions();
-         else {
+         } else {
+           RCLCPP_INFO(get_logger(), "[V2XNode::getVehicleDimensions] Received vehicle dimensions: height=%f, wheel_base=%f, wheel_tread=%f", dimensions.height, dimensions.wheel_base, dimensions.wheel_tread);
            app->setVehicleDimensions(dimensions);
          }
        } catch (const std::exception &e) {
