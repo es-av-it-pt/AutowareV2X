@@ -39,10 +39,11 @@ namespace v2x
     int timeout = 60;
     get_vehicle_dimensions_ = this->create_client<autoware_adapi_v1_msgs::srv::GetVehicleDimensions>("/api/vehicle/dimensions");
     if (get_vehicle_dimensions_->wait_for_service(std::chrono::seconds(timeout))) {
-      RCLCPP_INFO(get_logger(), "[V2XNode::getVehicleDimensions] Service /api/vehicle/dimensions is now available.");
-      this->getVehicleDimensions();
+      RCLCPP_INFO(get_logger(), "[V2XNode::V2XNode] Service /api/vehicle/dimensions is now available.");
+      vehicle_dimensions_available_ = true;
     } else {
-      RCLCPP_ERROR(get_logger(), "[V2XNode::getVehicleDimensions] Service /api/vehicle/dimensions is not available after waiting (timeout=%ds).", timeout);
+      RCLCPP_ERROR(get_logger(), "[V2XNode::V2XNode] Service /api/vehicle/dimensions is not available after waiting (timeout=%ds).", timeout);
+      vehicle_dimensions_available_ = false;
     }
 
     objects_sub_ = this->create_subscription<autoware_auto_perception_msgs::msg::PredictedObjects>("/perception/object_recognition/objects", 10, std::bind(&V2XNode::objectsCallback, this, _1));
@@ -207,31 +208,28 @@ namespace v2x
   }
 
   void V2XNode::getVehicleDimensions() {
+    if (!vehicle_dimensions_available_) {
+      RCLCPP_ERROR(get_logger(), "[V2XNode::getVehicleDimensions] Service /api/vehicle/dimensions is not available.");
+      return;
+    }
     RCLCPP_INFO(get_logger(), "[V2XNode::getVehicleDimensions] Sending service request to /api/vehicle/dimensions");
     auto request = std::make_shared<autoware_adapi_v1_msgs::srv::GetVehicleDimensions::Request>();
     auto future_result = get_vehicle_dimensions_->async_send_request(request, [this](rclcpp::Client<autoware_adapi_v1_msgs::srv::GetVehicleDimensions>::SharedFuture future) {
-     try
-     {
-       auto response = future.get();
-       RCLCPP_INFO(get_logger(), "[V2XNode::getVehicleDimensions] Received response from /api/vehicle/dimensions");
-       try {
-         auto dimensions = response->dimensions;
-         if (dimensions.height == 0 || dimensions.wheel_base == 0 || dimensions.wheel_tread == 0) {
-           RCLCPP_INFO(get_logger(), "[V2XNode::getVehicleDimensions] Received vehicle dimensions are zero. Trying again...");
-           this->getVehicleDimensions();
-         } else {
-           RCLCPP_INFO(get_logger(), "[V2XNode::getVehicleDimensions] Received vehicle dimensions: height=%f, wheel_base=%f, wheel_tread=%f", dimensions.height, dimensions.wheel_base, dimensions.wheel_tread);
-           app->setVehicleDimensions(dimensions);
-         }
-       } catch (const std::exception &e) {
-         RCLCPP_ERROR(get_logger(), "[V2XNode::getVehicleDimensions] Service response of /api/vehicle/dimensions failed: %s", e.what());
-       }
-     }
-     catch (const std::exception &e)
-     {
-       RCLCPP_ERROR(get_logger(), "[V2XNode::getVehicleDimensions] Service call of /api/vehicle/dimensions failed: %s", e.what());
-     }
-   });
+      try {
+        auto response = future.get();
+        RCLCPP_INFO(get_logger(), "[V2XNode::getVehicleDimensions] Received response from /api/vehicle/dimensions");
+        try {
+          auto dimensions = response->dimensions;
+          RCLCPP_INFO(get_logger(), "[V2XNode::getVehicleDimensions] Received vehicle dimensions: height=%f, wheel_base=%f, wheel_tread=%f", dimensions.height, dimensions.wheel_base, dimensions.wheel_tread);
+          app->cam->setVehicleDimensions(dimensions);
+        } catch (const std::exception &e) {
+          RCLCPP_ERROR(get_logger(), "[V2XNode::getVehicleDimensions] Service response of /api/vehicle/dimensions failed: %s", e.what());
+        }
+      }
+      catch (const std::exception &e) {
+        RCLCPP_ERROR(get_logger(), "[V2XNode::getVehicleDimensions] Service call of /api/vehicle/dimensions failed: %s", e.what());
+      }
+    });
   }
 }
 

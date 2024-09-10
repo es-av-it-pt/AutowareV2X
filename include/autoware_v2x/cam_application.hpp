@@ -24,7 +24,6 @@ public:
   void set_interval(vanetza::Clock::duration);
   void updateMGRS(double *, double *);
   void updateRP(double *, double *, double *);
-  void updateGenerationDeltaTime(int *, long *);
   void updateHeading(double *);
   void setVehicleDimensions(const autoware_adapi_v1_msgs::msg::VehicleDimensions &);
   void updateVelocityReport(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr);
@@ -41,15 +40,15 @@ private:
   vanetza::Clock::duration cam_interval_{};
 
   struct VehicleDimensions {
-    float wheel_radius;
-    float wheel_width;
-    float wheel_base;
-    float wheel_tread;
-    float front_overhang;
-    float rear_overhang;
-    float left_overhang;
-    float right_overhang;
-    float height;
+    float wheel_radius = 0.0;
+    float wheel_width = 0.0;
+    float wheel_base = 0.0;
+    float wheel_tread = 0.0;
+    float front_overhang = 0.0;
+    float rear_overhang = 0.0;
+    float left_overhang = 0.0;
+    float right_overhang = 0.0;
+    float height = 0.0;
   };
   VehicleDimensions vehicleDimensions_;
 
@@ -131,9 +130,6 @@ private:
     float steering_tire_angle;
   };
   VehicleStatus vehicleStatus_;
-
-  int generationDeltaTime_;
-  long gdt_timestamp_{};
 
   double objectConfidenceThreshold_;
 

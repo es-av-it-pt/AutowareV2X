@@ -44,7 +44,6 @@ namespace v2x
     positionConfidenceEllipse_(),
     velocityReport_(),
     vehicleStatus_(),
-    generationDeltaTime_(0),
     objectConfidenceThreshold_(0.0),
     sending_(false),
     is_sender_(is_sender),
@@ -62,6 +61,8 @@ namespace v2x
     std::mt19937 gen(rd());
     std::uniform_int_distribution<unsigned long> dis(0, 4294967295);
     stationId_ = dis(gen);
+
+    node_->getVehicleDimensions();
   }
 
   void CamApplication::set_interval(Clock::duration interval) {
@@ -157,16 +158,16 @@ namespace v2x
     positionConfidenceEllipse_.y.insert(*lon);
   }
 
-  void CamApplication::updateGenerationDeltaTime(int *gdt, long *gdt_timestamp) {
-    generationDeltaTime_ = *gdt;
-    gdt_timestamp_ = *gdt_timestamp; // ETSI-epoch milliseconds timestamp
-  }
-
   void CamApplication::updateHeading(double *yaw) {
     ego_.heading = *yaw;
   }
 
   void CamApplication::setVehicleDimensions(const autoware_adapi_v1_msgs::msg::VehicleDimensions &msg) {
+    if (msg == autoware_adapi_v1_msgs::msg::VehicleDimensions{}) {
+      RCLCPP_WARN(node_->get_logger(), "[CamApplication::getVehicleDimensions] Vehicle dimensions not available");
+      return;
+    }
+
     vehicleDimensions_.wheel_radius = msg.wheel_radius;
     vehicleDimensions_.wheel_width = msg.wheel_width;
     vehicleDimensions_.wheel_base = msg.wheel_base;
@@ -213,6 +214,8 @@ namespace v2x
 
     sending_ = true;
 
+    std::chrono::milliseconds now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+
     vanetza::asn1::Cam message;
 
     ItsPduHeader_t &header = message->header;
@@ -222,7 +225,9 @@ namespace v2x
 
     CoopAwareness_t &cam = message->cam;
 
-    cam.generationDeltaTime = generationDeltaTime_;
+    // Convert Unix timestamp to ETSI epoch (2004-01-01 00:00:00)
+    cam.generationDeltaTime = (now_ms.count() - 1072915200000) % 65536;
+    RCLCPP_INFO(node_->get_logger(), "[CamApplication::send] Sending CAM with generationDeltaTime %ld", cam.generationDeltaTime);
 
     BasicContainer_t &basic_container = cam.camParameters.basicContainer;
     basic_container.stationType = StationType_passengerCar;

@@ -7,6 +7,8 @@
 #include "autoware_auto_vehicle_msgs/msg/velocity_report.hpp"
 #include "autoware_auto_vehicle_msgs/msg/gear_report.hpp"
 #include "autoware_auto_vehicle_msgs/msg/steering_report.hpp"
+#include "autoware_adapi_v1_msgs/srv/get_vehicle_dimensions.hpp"
+#include "autoware_adapi_v1_msgs/msg/vehicle_dimensions.hpp"
 #include "tf2_msgs/msg/tf_message.hpp"
 #include <boost/asio/io_service.hpp>
 #include "autoware_v2x/v2x_app.hpp"
@@ -32,6 +34,7 @@ namespace v2x
     void publishObjects(std::vector<CpmApplication::Object> *, int cpm_num);
     void publishCpmSenderObject(double, double, double);
     void publishReceivedCam(etsi_its_cam_ts_msgs::msg::CAM &);
+    void getVehicleDimensions();
 
     std::ofstream latency_log_file;
 
@@ -40,7 +43,6 @@ namespace v2x
     void velocityReportCallback(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr msg);
     void gearReportCallback(const autoware_auto_vehicle_msgs::msg::GearReport::ConstSharedPtr msg);
     void steeringReportCallback(const autoware_auto_vehicle_msgs::msg::SteeringReport::ConstSharedPtr msg);
-    void getVehicleDimensions();
     void tfCallback(const tf2_msgs::msg::TFMessage::ConstSharedPtr msg);
 
     rclcpp::Subscription<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr objects_sub_;
@@ -55,6 +57,8 @@ namespace v2x
 
     double pos_lat_;
     double pos_lon_;
+
+    bool vehicle_dimensions_available_;
   };
 }
 
