@@ -11,6 +11,7 @@
 #include <vanetza/btp/ports.hpp>
 #include <vanetza/asn1/cam.hpp>
 #include <vanetza/asn1/packet_visitor.hpp>
+#include <vanetza/facilities/cam_functions.hpp>
 #include <chrono>
 #include <functional>
 #include <iostream>
@@ -95,10 +96,12 @@ namespace v2x
     }
 
     asn1::Cam rec_cam = *rec_cam_ptr;
-    RCLCPP_INFO(node_->get_logger(), "[CamApplication::indicate] Received CAM from station with ID #%ld", rec_cam->header.stationID);
     std::chrono::milliseconds now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+    RCLCPP_INFO(node_->get_logger(), "[CamApplication::indicate] Received CAM from station with ID #%ld at %ld epoch time", rec_cam->header.stationID, now_ms.count());
+    vanetza::facilities::print_indented(std::cout, rec_cam, "  ", 0);
 
     cam_ts_CAM_t ts_cam;
+    std::memset(&ts_cam, 0, sizeof(ts_cam));
 
     cam_ts_ItsPduHeader_t &header = ts_cam.header;
     header.protocolVersion = rec_cam->header.protocolVersion;
@@ -139,6 +142,7 @@ namespace v2x
     bvc.yawRate.yawRateConfidence = rec_bvc.yawRate.yawRateConfidence;
 
     etsi_its_cam_ts_msgs::msg::CAM ros_msg;
+    std::memset(&ros_msg, 0, sizeof(ros_msg));
     etsi_its_cam_ts_conversion::toRos_CAM(ts_cam, ros_msg);
 
     node_->publishReceivedCam(ros_msg);
@@ -227,7 +231,6 @@ namespace v2x
 
     // Convert Unix timestamp to ETSI epoch (2004-01-01 00:00:00)
     cam.generationDeltaTime = (now_ms.count() - 1072915200000) % 65536;
-    RCLCPP_INFO(node_->get_logger(), "[CamApplication::send] Sending CAM with generationDeltaTime %ld", cam.generationDeltaTime);
 
     BasicContainer_t &basic_container = cam.camParameters.basicContainer;
     basic_container.stationType = StationType_passengerCar;
@@ -345,7 +348,7 @@ namespace v2x
     bvc.yawRate.yawRateConfidence = YawRateConfidence_unavailable;
     // ------------------------------
 
-    RCLCPP_INFO(node_->get_logger(), "[CamApplication::send] Sending CAM from station with ID %ld", stationId_);
+    RCLCPP_INFO(node_->get_logger(), "[CamApplication::send] Sending CAM from station with ID %ld with generationDeltaTime %ld", stationId_, cam.generationDeltaTime);
     std::unique_ptr<geonet::DownPacket> payload{new geonet::DownPacket()};
     payload->layer(OsiLayer::Application) = std::move(message);
 

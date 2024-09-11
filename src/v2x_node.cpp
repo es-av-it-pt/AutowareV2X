@@ -36,7 +36,7 @@ namespace v2x
   V2XNode::V2XNode(const rclcpp::NodeOptions &node_options) : rclcpp::Node("autoware_v2x_node", node_options) {
     using std::placeholders::_1;
 
-    int timeout = 60;
+    int timeout = 10;
     get_vehicle_dimensions_ = this->create_client<autoware_adapi_v1_msgs::srv::GetVehicleDimensions>("/api/vehicle/dimensions");
     if (get_vehicle_dimensions_->wait_for_service(std::chrono::seconds(timeout))) {
       RCLCPP_INFO(get_logger(), "[V2XNode::V2XNode] Service /api/vehicle/dimensions is now available.");
@@ -60,7 +60,7 @@ namespace v2x
     cam_rec_pub_ = create_publisher<etsi_its_cam_ts_msgs::msg::CAM>("/v2x/cam_ts/received", rclcpp::QoS{10});
 
     // Declare Parameters
-    this->declare_parameter<std::string>("link_layer", "cube-evk");
+    this->declare_parameter<std::string>("link_layer", "ethernet");
     this->declare_parameter<std::string>("network_interface", "v2x_testing");
     this->declare_parameter<std::string>("cube_ip", "127.0.0.1");
     this->declare_parameter<bool>("is_sender", true);
