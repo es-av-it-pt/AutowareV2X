@@ -348,7 +348,8 @@ namespace v2x
     bvc.yawRate.yawRateConfidence = YawRateConfidence_unavailable;
     // ------------------------------
 
-    RCLCPP_INFO(node_->get_logger(), "[CamApplication::send] Sending CAM from station with ID %ld with generationDeltaTime %ld", stationId_, cam.generationDeltaTime);
+    RCLCPP_INFO(node_->get_logger(), "[CamApplication::send] Sending CAM from station with ID %ld with generationDeltaTime %ld, latitude %f, longitude %f, altitude %f",
+            stationId_, cam.generationDeltaTime, ego_.latitude, ego_.longitude, ego_.altitude);
     std::unique_ptr<geonet::DownPacket> payload{new geonet::DownPacket()};
     payload->layer(OsiLayer::Application) = std::move(message);
 

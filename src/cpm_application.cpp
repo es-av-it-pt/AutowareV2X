@@ -440,7 +440,6 @@ namespace v2x {
   }
 
   void CpmApplication::send() {
-
     if (is_sender_) {
 
       sending_ = true;
@@ -448,6 +447,8 @@ namespace v2x {
       printObjectsList(cpm_num_);
 
       // RCLCPP_INFO(node_->get_logger(), "[CpmApplication::send] Sending CPM...");
+
+      std::chrono::milliseconds now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
 
       vanetza::asn1::Cpm message;
 
@@ -461,8 +462,7 @@ namespace v2x {
 
       // Set GenerationTime
       RCLCPP_INFO(node_->get_logger(), "[CpmApplication::send] %ld", gdt_timestamp_);
-      //asn_long2INTEGER(&cpm.generationTime, (long) gdt_timestamp_);
-      cpm.generationDeltaTime = gdt_timestamp_;
+      cpm.generationDeltaTime = (now_ms.count() - 1072915200000) % 65536;
 
       CpmManagementContainer_t &management = cpm.cpmParameters.managementContainer;
       management.stationType = StationType_passengerCar;
