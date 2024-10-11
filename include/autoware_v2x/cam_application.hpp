@@ -23,8 +23,8 @@ public:
   void indicate(const DataIndication &, UpPacketPtr) override;
   void set_interval(vanetza::Clock::duration);
   void updateMGRS(double *, double *);
-  void updateRP(double *, double *, double *);
-  void updateHeading(double *);
+  void updateRP(const double *, const double *, const double *);
+  void updateHeading(const double *);
   void setVehicleDimensions(const autoware_adapi_v1_msgs::msg::VehicleDimensions &);
   void updateVelocityReport(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr);
   void updateGearReport(const autoware_auto_vehicle_msgs::msg::GearReport::ConstSharedPtr);
@@ -32,6 +32,7 @@ public:
   void send();
 
 private:
+  void calc_interval();
   void schedule_timer();
   void on_timer(vanetza::Clock::time_point);
 
@@ -121,6 +122,7 @@ private:
     float heading_rate;
     float lateral_velocity;
     float longitudinal_velocity;
+    float speed;
     float longitudinal_acceleration;
   };
   VelocityReport velocityReport_;
@@ -131,17 +133,10 @@ private:
   };
   VehicleStatus vehicleStatus_;
 
-  double objectConfidenceThreshold_;
-
-  bool updating_velocity_report_;
-  bool updating_vehicle_status_;
   bool sending_;
   bool is_sender_;
-  bool reflect_packet_;
 
   unsigned long stationId_;
-  int cam_num_;
-  int received_cam_num_;
 
   bool use_dynamic_generation_rules_;
 };

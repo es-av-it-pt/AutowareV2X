@@ -39,19 +39,15 @@ namespace v2x
   CamApplication::CamApplication(V2XNode * node, Runtime & rt, bool is_sender)
   : node_(node),
     runtime_(rt),
-    cam_interval_(milliseconds(100)),
+    cam_interval_(milliseconds(1000)),
     vehicleDimensions_(),
     ego_(),
     positionConfidenceEllipse_(),
     velocityReport_(),
     vehicleStatus_(),
-    objectConfidenceThreshold_(0.0),
     sending_(false),
     is_sender_(is_sender),
-    reflect_packet_(false),
-    cam_num_(0),
-    received_cam_num_(0),
-    use_dynamic_generation_rules_(false)
+    use_dynamic_generation_rules_(true)
   {
     RCLCPP_INFO(node_->get_logger(), "CamApplication started. is_sender: %d", is_sender_);
     set_interval(cam_interval_);
@@ -72,11 +68,72 @@ namespace v2x
     schedule_timer();
   }
 
+  static double calc_haversine(double lat1, double lon1, double lat2, double lon2) {
+    const double R = 6371e3;
+    double dLat = (lat2 - lat1) * M_PI / 180;
+    double dLon = (lon2 - lon1) * M_PI / 180;
+
+    lat1 = lat1 * (M_PI / 180);
+    lat2 = lat2 * (M_PI / 180);
+
+    double a = std::sin(dLat / 2) * std::sin(dLat / 2) +
+               std::sin(dLon / 2) * std::sin(dLon / 2) * std::cos(lat1) * std::cos(lat2);
+    double c = 2 * std::atan2(std::sqrt(a), std::sqrt(1 - a));
+
+    return R * c;
+  }
+
+  void CamApplication::calc_interval() {
+    if (use_dynamic_generation_rules_) {
+      static struct {
+        double speed;
+        double heading;
+        double latitude;
+        double longitude;
+      } lastCam = {0.0, 0.0, 0.0, 0.0};
+
+      double latitude = ego_.latitude;
+      double longitude = ego_.longitude;
+      double heading = ego_.heading;
+      double speed = velocityReport_.speed;
+
+      double deltaSpeed = std::fabs(speed - lastCam.speed);
+      double deltaHeading = std::fabs(heading - lastCam.heading);
+      if (deltaHeading > 180.0) deltaHeading = 360.0 - deltaHeading;
+
+      double distance = calc_haversine(lastCam.latitude, lastCam.longitude, latitude, longitude);
+
+      const double distance_threshold = 4.0;
+      const double speed_threshold = 0.5;
+      const double heading_threshold = 4.0;
+
+      if (distance > distance_threshold || deltaSpeed > speed_threshold || deltaHeading > heading_threshold) {
+        int interval = static_cast<int>((distance / speed) * 1000);
+
+        if (interval < 100) {
+          cam_interval_ = milliseconds(100);
+        } else if (interval > 1000) {
+          cam_interval_ = milliseconds(1000);
+        } else {
+          cam_interval_ = milliseconds(interval);
+        }
+
+        lastCam.speed = speed;
+        lastCam.heading = heading;
+        lastCam.latitude = latitude;
+        lastCam.longitude = longitude;
+      } else {
+        cam_interval_ = milliseconds(1000);
+      }
+    }
+  }
+
   void CamApplication::schedule_timer() {
     runtime_.schedule(cam_interval_, std::bind(&CamApplication::on_timer, this, std::placeholders::_1));
   }
 
   void CamApplication::on_timer(vanetza::Clock::time_point) {
+    calc_interval();
     schedule_timer();
     send();
   }
@@ -153,7 +210,7 @@ namespace v2x
     ego_.mgrs_y = *y;
   }
 
-  void CamApplication::updateRP(double *lat, double *lon, double *altitude) {
+  void CamApplication::updateRP(const double *lat, const double *lon, const double *altitude) {
     ego_.latitude = *lat;
     ego_.longitude = *lon;
     ego_.altitude = *altitude;
@@ -162,7 +219,7 @@ namespace v2x
     positionConfidenceEllipse_.y.insert(*lon);
   }
 
-  void CamApplication::updateHeading(double *yaw) {
+  void CamApplication::updateHeading(const double *yaw) {
     ego_.heading = *yaw;
   }
 
@@ -191,11 +248,13 @@ namespace v2x
       return;
     }
     float longitudinal_acceleration = (msg->longitudinal_velocity - velocityReport_.longitudinal_velocity) / dt;
+    float speed = std::sqrt(std::pow(msg->longitudinal_velocity, 2) + std::pow(msg->lateral_velocity, 2));
 
     velocityReport_.stamp = msg->header.stamp;
     velocityReport_.heading_rate = msg->heading_rate;
     velocityReport_.lateral_velocity = msg->lateral_velocity;
     velocityReport_.longitudinal_velocity = msg->longitudinal_velocity;
+    velocityReport_.speed = speed;
     velocityReport_.longitudinal_acceleration = longitudinal_acceleration;
   }
 
@@ -305,7 +364,7 @@ namespace v2x
     uint8_t gearStatus = vehicleStatus_.gear;
     float steering_tire_angle = vehicleStatus_.steering_tire_angle;
 
-    long speed = std::lround(std::sqrt(std::pow(longitudinal_velocity, 2) + std::pow(lateral_velocity, 2)) * 100);
+    long speed = std::lround(velocityReport_.speed * 100);
     if (0 <= speed && speed <= 16382) bvc.speed.speedValue = speed;
     else bvc.speed.speedValue = SpeedValue_unavailable;
 
@@ -371,9 +430,6 @@ namespace v2x
     std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds> (
       std::chrono::system_clock::now().time_since_epoch()
     );
-    node_->latency_log_file << "T_depart," << cam_num_ << "," << ms.count() << std::endl;
-
-    ++cam_num_;
   }
 
 }
