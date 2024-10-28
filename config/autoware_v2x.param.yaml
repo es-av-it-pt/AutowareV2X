@@ -1,9 +1,10 @@
 /**:
   ros__parameters:
-    link_layer: "ethernet"
+    link_layer: "cube-evk"
     network_interface: "v2x_testing"
-    cube_ip: "127.0.0.1"
+    cube_ip: "192.168.94.84"
     is_sender: true
+    publish_own_cams: false
     security: "none"
     certificate: ""
     certificate-key: ""

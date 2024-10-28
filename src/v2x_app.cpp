@@ -189,9 +189,11 @@ namespace v2x
     context.set_link_layer(link_layer.get());
 
     bool is_sender;
+    bool publish_own_cams;
     node_->get_parameter("is_sender", is_sender);
+    node_->get_parameter("publish_own_cams", publish_own_cams);
     cp = new CpmApplication(node_, trigger.runtime(), is_sender);
-    cam = new CamApplication(node_, trigger.runtime(), is_sender);
+    cam = new CamApplication(node_, trigger.runtime(), is_sender, publish_own_cams);
 
     context.enable(cp);
     context.enable(cam);

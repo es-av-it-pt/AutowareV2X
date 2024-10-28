@@ -36,7 +36,7 @@ using namespace std::chrono;
 
 namespace v2x
 {
-  CamApplication::CamApplication(V2XNode * node, Runtime & rt, bool is_sender)
+  CamApplication::CamApplication(V2XNode * node, Runtime & rt, bool is_sender, bool publish_own_cams)
   : node_(node),
     runtime_(rt),
     cam_interval_(milliseconds(1000)),
@@ -47,9 +47,10 @@ namespace v2x
     vehicleStatus_(),
     sending_(false),
     is_sender_(is_sender),
+    publish_own_cams_(publish_own_cams),
     use_dynamic_generation_rules_(true)
   {
-    RCLCPP_INFO(node_->get_logger(), "CamApplication started. is_sender: %d", is_sender_);
+    RCLCPP_INFO(node_->get_logger(), "CamApplication started. is_sender: %d, publish_own_cams: %d", is_sender_, publish_own_cams_);
     set_interval(cam_interval_);
     //createTables();
 
@@ -411,6 +412,52 @@ namespace v2x
             stationId_, cam.generationDeltaTime, ego_.latitude, ego_.longitude, ego_.altitude);
     std::unique_ptr<geonet::DownPacket> payload{new geonet::DownPacket()};
     payload->layer(OsiLayer::Application) = std::move(message);
+
+    if (publish_own_cams_) {
+      cam_ts_CAM_t ts_cam;
+      std::memset(&ts_cam, 0, sizeof(ts_cam));
+
+      cam_ts_ItsPduHeader_t &ros_header = ts_cam.header;
+      ros_header.protocolVersion = header.protocolVersion;
+      ros_header.messageId = header.messageID;
+      ros_header.stationId = header.stationID;
+
+      cam_ts_CamPayload_t &coopAwareness = ts_cam.cam;
+      coopAwareness.generationDeltaTime = cam.generationDeltaTime;
+
+      cam_ts_BasicContainer_t &ros_basic_container = coopAwareness.camParameters.basicContainer;
+      ros_basic_container.stationType = basic_container.stationType;
+      ros_basic_container.referencePosition.latitude = basic_container.referencePosition.latitude;
+      ros_basic_container.referencePosition.longitude = basic_container.referencePosition.longitude;
+      ros_basic_container.referencePosition.altitude.altitudeValue = basic_container.referencePosition.altitude.altitudeValue;
+      ros_basic_container.referencePosition.altitude.altitudeConfidence = basic_container.referencePosition.altitude.altitudeConfidence;
+      ros_basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisLength = basic_container.referencePosition.positionConfidenceEllipse.semiMajorConfidence;
+      ros_basic_container.referencePosition.positionConfidenceEllipse.semiMinorAxisLength = basic_container.referencePosition.positionConfidenceEllipse.semiMinorConfidence;
+      ros_basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisOrientation = basic_container.referencePosition.positionConfidenceEllipse.semiMajorOrientation;
+
+      cam_ts_BasicVehicleContainerHighFrequency_t &ros_bvc = coopAwareness.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency;
+      coopAwareness.camParameters.highFrequencyContainer.present = cam_ts_HighFrequencyContainer_PR_basicVehicleContainerHighFrequency;
+      ros_bvc.heading.headingValue = bvc.heading.headingValue;
+      ros_bvc.heading.headingConfidence = bvc.heading.headingConfidence;
+      ros_bvc.speed.speedValue = bvc.speed.speedValue;
+      ros_bvc.speed.speedConfidence = bvc.speed.speedConfidence;
+      ros_bvc.driveDirection = bvc.driveDirection;
+      ros_bvc.vehicleLength.vehicleLengthValue = bvc.vehicleLength.vehicleLengthValue;
+      ros_bvc.vehicleLength.vehicleLengthConfidenceIndication = bvc.vehicleLength.vehicleLengthConfidenceIndication;
+      ros_bvc.vehicleWidth = bvc.vehicleWidth;
+      ros_bvc.longitudinalAcceleration.value = bvc.longitudinalAcceleration.longitudinalAccelerationValue;
+      ros_bvc.longitudinalAcceleration.confidence = bvc.longitudinalAcceleration.longitudinalAccelerationConfidence;
+      ros_bvc.curvature.curvatureValue = bvc.curvature.curvatureValue;
+      ros_bvc.curvature.curvatureConfidence = bvc.curvature.curvatureConfidence;
+      ros_bvc.curvatureCalculationMode = bvc.curvatureCalculationMode;
+      ros_bvc.yawRate.yawRateValue = bvc.yawRate.yawRateValue;
+      ros_bvc.yawRate.yawRateConfidence = bvc.yawRate.yawRateConfidence;
+
+      etsi_its_cam_ts_msgs::msg::CAM ros_msg;
+      std::memset(&ros_msg, 0, sizeof(ros_msg));
+      etsi_its_cam_ts_conversion::toRos_CAM(ts_cam, ros_msg);
+      node_->publishReceivedCam(ros_msg);
+    }
 
     Application::DataRequest request;
     request.its_aid = aid::CP;

@@ -2,15 +2,20 @@
 #define CAM_APPLICATION_HPP_EUIC2VFR
 
 #include "autoware_v2x/application.hpp"
+#include "autoware_v2x/positioning.hpp"
 #include "rclcpp/rclcpp.hpp"
-#include <boost/asio/io_service.hpp>
-#include <boost/asio/steady_timer.hpp>
-#include "autoware_auto_vehicle_msgs/msg/velocity_report.hpp"
+
+#include <vanetza/asn1/cam.hpp>
+
+#include "autoware_adapi_v1_msgs/msg/vehicle_dimensions.hpp"
 #include "autoware_auto_vehicle_msgs/msg/gear_report.hpp"
 #include "autoware_auto_vehicle_msgs/msg/steering_report.hpp"
-#include "autoware_adapi_v1_msgs/msg/vehicle_dimensions.hpp"
-#include "autoware_v2x/positioning.hpp"
-#include <vanetza/asn1/cam.hpp>
+#include "autoware_auto_vehicle_msgs/msg/velocity_report.hpp"
+
+#include <boost/asio/io_service.hpp>
+#include <boost/asio/steady_timer.hpp>
+
+#include <etsi_its_cam_ts_coding/cam_ts_CAM.h>
 
 namespace v2x
 {
@@ -18,7 +23,7 @@ class V2XNode;
 class CamApplication : public Application
 {
 public:
-  CamApplication(V2XNode *node, vanetza::Runtime &, bool is_sender);
+  CamApplication(V2XNode *node, vanetza::Runtime &, bool is_sender, bool publish_own_cams);
   PortType port() override;
   void indicate(const DataIndication &, UpPacketPtr) override;
   void set_interval(vanetza::Clock::duration);
@@ -35,6 +40,7 @@ private:
   void calc_interval();
   void schedule_timer();
   void on_timer(vanetza::Clock::time_point);
+  static void build_etsi_its_cam_ts_from_vanetza(vanetza::asn1::Cam &, cam_ts_CAM_t &);
 
   V2XNode *node_;
   vanetza::Runtime &runtime_;
@@ -135,6 +141,7 @@ private:
 
   bool sending_;
   bool is_sender_;
+  bool publish_own_cams_;
 
   unsigned long stationId_;
 
