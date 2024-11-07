@@ -9,7 +9,6 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include <vanetza/btp/ports.hpp>
-#include <vanetza/asn1/cam.hpp>
 #include <vanetza/asn1/packet_visitor.hpp>
 #include <vanetza/facilities/cam_functions.hpp>
 #include <chrono>
@@ -25,6 +24,7 @@
 #include <etsi_its_cam_ts_msgs/msg/cam.hpp>
 #include <etsi_its_cam_ts_coding/cam_ts_CAM.h>
 #include <etsi_its_cam_ts_conversion/convertCAM.h>
+#include <etsi_its_msgs_utils/cam_ts_access.hpp>
 
 #include <boost/units/cmath.hpp>
 #include <boost/units/systems/si/prefixes.hpp>
@@ -280,30 +280,30 @@ namespace v2x
 
     std::chrono::milliseconds now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
 
-    vanetza::asn1::Cam message;
+    vanetza::asn1::r2::Cam message;
 
-    ItsPduHeader_t &header = message->header;
+    Vanetza_ITS2_ItsPduHeader_t &header = message->header;
     header.protocolVersion = 2;
-    header.messageID = ItsPduHeader__messageID_cam;
-    header.stationID = stationId_;
+    header.messageId = Vanetza_ITS2_MessageId_cam;
+    header.stationId = stationId_;
 
-    CoopAwareness_t &cam = message->cam;
+    Vanetza_ITS2_CamPayload_t &cam = message->cam;
 
     // Convert Unix timestamp to ETSI epoch (2004-01-01 00:00:00)
     cam.generationDeltaTime = (now_ms.count() - 1072915200000) % 65536;
 
-    BasicContainer_t &basic_container = cam.camParameters.basicContainer;
-    basic_container.stationType = StationType_passengerCar;
+    Vanetza_ITS2_BasicContainer_t &basic_container = cam.camParameters.basicContainer;
+    basic_container.stationType = cam_ts_TrafficParticipantType_passengerCar;
     float latitude = ego_.latitude * 1e7;
     float longitude = ego_.longitude * 1e7;
     float altitude = ego_.altitude * 100;
 
     if (-900000000 <= latitude && latitude <= 900000000) basic_container.referencePosition.latitude = latitude;
-    else basic_container.referencePosition.latitude = Latitude_unavailable;
+    else basic_container.referencePosition.latitude = Vanetza_ITS2_Latitude_unavailable;
     if (-1800000000 <= longitude && longitude <= 1800000000) basic_container.referencePosition.longitude = longitude;
-    else basic_container.referencePosition.longitude = Longitude_unavailable;
+    else basic_container.referencePosition.longitude = Vanetza_ITS2_Longitude_unavailable;
     if (-100000 <= altitude && altitude <= 800000) basic_container.referencePosition.altitude.altitudeValue = altitude;
-    else basic_container.referencePosition.altitude.altitudeValue = AltitudeValue_unavailable;
+    else basic_container.referencePosition.altitude.altitudeValue = Vanetza_ITS2_AltitudeValue_unavailable;
 
     // Articles consulted for the positionConficenceEllipse
     // https://users.cs.utah.edu/~tch/CS4640F2019/resources/A%20geometric%20interpretation%20of%20the%20covariance%20matrix.pdf
@@ -331,32 +331,32 @@ namespace v2x
       double lambda_min = std::min(lambda1, lambda2);
 
       // For 95% confidence level, must use 2.4477
-      double majorConfidence = std::lround(2.4477 * std::sqrt(lambda_max));
-      double minorConfidence = std::lround(2.4477 * std::sqrt(lambda_min));
-      double majorOrientation = - (sigma_xy != 0
+      double majorAxisLength = std::lround(2.4477 * std::sqrt(lambda_max));
+      double minorAxisLength = std::lround(2.4477 * std::sqrt(lambda_min));
+      double majorAxisOrientation = - (sigma_xy != 0
                                    ? std::lround(std::atan(- (sigma_xx - lambda_max) / sigma_xy) * 180 / M_PI)
                                    : sigma_xx != 0 ? 0 : -90) * 10;
-      if (majorOrientation < 0) majorOrientation += 3600;
+      if (majorAxisOrientation < 0) majorAxisOrientation += 3600;
 
-      if (0 <= majorConfidence && majorConfidence <= 4094) basic_container.referencePosition.positionConfidenceEllipse.semiMajorConfidence = majorConfidence;
-      else basic_container.referencePosition.positionConfidenceEllipse.semiMajorConfidence = SemiAxisLength_unavailable;
-      if (0 <= minorConfidence && minorConfidence <= 4094) basic_container.referencePosition.positionConfidenceEllipse.semiMinorConfidence = minorConfidence;
-      else basic_container.referencePosition.positionConfidenceEllipse.semiMinorConfidence = SemiAxisLength_unavailable;
-      if (0 <= majorOrientation && majorOrientation <= 3600) basic_container.referencePosition.positionConfidenceEllipse.semiMajorOrientation = majorOrientation;
-      else basic_container.referencePosition.positionConfidenceEllipse.semiMajorOrientation = HeadingValue_unavailable;
+      if (0 <= majorAxisLength && majorAxisLength <= 4094) basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisLength = majorAxisLength;
+      else basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisLength = cam_ts_SemiAxisLength_unavailable;
+      if (0 <= minorAxisLength && minorAxisLength <= 4094) basic_container.referencePosition.positionConfidenceEllipse.semiMinorAxisLength = minorAxisLength;
+      else basic_container.referencePosition.positionConfidenceEllipse.semiMinorAxisLength = cam_ts_SemiAxisLength_unavailable;
+      if (0 <= majorAxisOrientation && majorAxisOrientation <= 3600) basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisOrientation = majorAxisOrientation;
+      else basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisOrientation = cam_ts_Wgs84AngleValue_unavailable;
     } else {
-      basic_container.referencePosition.positionConfidenceEllipse.semiMajorConfidence = SemiAxisLength_unavailable;
-      basic_container.referencePosition.positionConfidenceEllipse.semiMinorConfidence = SemiAxisLength_unavailable;
-      basic_container.referencePosition.positionConfidenceEllipse.semiMajorOrientation = HeadingValue_unavailable;
+      basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisLength = cam_ts_SemiAxisLength_unavailable;
+      basic_container.referencePosition.positionConfidenceEllipse.semiMinorAxisLength = cam_ts_SemiAxisLength_unavailable;
+      basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisOrientation = cam_ts_Wgs84AngleValue_unavailable;
     }
 
-    BasicVehicleContainerHighFrequency_t &bvc = cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency;
-    cam.camParameters.highFrequencyContainer.present = HighFrequencyContainer_PR_basicVehicleContainerHighFrequency;
+    Vanetza_ITS2_BasicVehicleContainerHighFrequency_t &bvc = cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency;
+    cam.camParameters.highFrequencyContainer.present = Vanetza_ITS2_HighFrequencyContainer_PR_basicVehicleContainerHighFrequency;
 
     int heading = std::lround(((-ego_.heading * 180.0 / M_PI) + 90.0) * 10.0);
     if (heading < 0) heading += 3600;
     if (0 <= heading && heading <= 3600) bvc.heading.headingValue = heading;
-    else bvc.heading.headingValue = HeadingValue_unavailable;
+    else bvc.heading.headingValue = Vanetza_ITS2_HeadingValue_unavailable;
 
     float heading_rate = velocityReport_.heading_rate;
     float lateral_velocity = velocityReport_.lateral_velocity;
@@ -367,31 +367,31 @@ namespace v2x
 
     long speed = std::lround(velocityReport_.speed * 100);
     if (0 <= speed && speed <= 16382) bvc.speed.speedValue = speed;
-    else bvc.speed.speedValue = SpeedValue_unavailable;
+    else bvc.speed.speedValue = Vanetza_ITS2_SpeedValue_unavailable;
 
     if ((gearStatus >= 2 && gearStatus <= 19) || (gearStatus == 23 || gearStatus == 24))
-      bvc.driveDirection = DriveDirection_forward;
+      bvc.driveDirection = Vanetza_ITS2_DriveDirection_forward;
     else if (gearStatus == 20 || gearStatus == 21)
-      bvc.driveDirection = DriveDirection_backward;
+      bvc.driveDirection = Vanetza_ITS2_DriveDirection_backward;
     else
-      bvc.driveDirection = DriveDirection_unavailable;
+      bvc.driveDirection = Vanetza_ITS2_DriveDirection_unavailable;
 
     long vehicleLength = std::lround((vehicleDimensions_.front_overhang + vehicleDimensions_.wheel_base + vehicleDimensions_.rear_overhang) * 10);
     if (1 <= vehicleLength && vehicleLength <= 1022) bvc.vehicleLength.vehicleLengthValue = vehicleLength;
-    else bvc.vehicleLength.vehicleLengthValue = VehicleLengthValue_unavailable;
+    else bvc.vehicleLength.vehicleLengthValue = Vanetza_ITS2_VehicleLengthValue_unavailable;
 
     long vehicleWidth = std::lround((vehicleDimensions_.left_overhang + vehicleDimensions_.wheel_tread + vehicleDimensions_.right_overhang) * 10);
     if (1 <= vehicleWidth && vehicleWidth <= 61) bvc.vehicleWidth = vehicleWidth;
-    else bvc.vehicleWidth = VehicleWidth_unavailable;
+    else bvc.vehicleWidth = Vanetza_ITS2_VehicleWidth_unavailable;
 
-    if (-160 <= longitudinal_acceleration && longitudinal_acceleration <= 160) bvc.longitudinalAcceleration.longitudinalAccelerationValue = longitudinal_acceleration;
-    else bvc.longitudinalAcceleration.longitudinalAccelerationValue = LongitudinalAccelerationValue_unavailable;
+    if (-160 <= longitudinal_acceleration && longitudinal_acceleration <= 160) bvc.longitudinalAcceleration.value = longitudinal_acceleration;
+    else bvc.longitudinalAcceleration.value = cam_ts_AccelerationValue_unavailable;
 
     long curvature = longitudinal_velocity != 0 ? std::abs(std::lround(lateral_velocity / std::pow(longitudinal_velocity, 2) * 100)) * (steering_tire_angle < 0 ? -1 : 1)
                                                 : std::numeric_limits<long>::infinity();
     if (-1023 <= curvature && curvature <= 1022) bvc.curvature.curvatureValue = curvature;
-    else bvc.curvature.curvatureValue = CurvatureValue_unavailable;
-    bvc.curvatureCalculationMode = CurvatureCalculationMode_yawRateNotUsed;
+    else bvc.curvature.curvatureValue = Vanetza_ITS2_CurvatureValue_unavailable;
+    bvc.curvatureCalculationMode = Vanetza_ITS2_CurvatureCalculationMode_yawRateNotUsed;
 
     long heading_rate_deg = std::abs(std::lround(heading_rate * (180.0 / M_PI))) * (steering_tire_angle < 0 ? -1 : 1);
     if (-32766 <= heading_rate_deg && heading_rate_deg <= 32766) bvc.yawRate.yawRateValue = heading_rate_deg;
@@ -403,7 +403,7 @@ namespace v2x
     bvc.heading.headingConfidence = HeadingConfidence_unavailable;
     bvc.speed.speedConfidence = SpeedConfidence_unavailable;
     bvc.vehicleLength.vehicleLengthConfidenceIndication = VehicleLengthConfidenceIndication_unavailable;
-    bvc.longitudinalAcceleration.longitudinalAccelerationConfidence = AccelerationConfidence_unavailable;
+    bvc.longitudinalAcceleration.confidence = cam_ts_AccelerationConfidence_unavailable;
     bvc.curvature.curvatureConfidence = CurvatureConfidence_unavailable;
     bvc.yawRate.yawRateConfidence = YawRateConfidence_unavailable;
     // ------------------------------
@@ -419,8 +419,8 @@ namespace v2x
 
       cam_ts_ItsPduHeader_t &ros_header = ts_cam.header;
       ros_header.protocolVersion = header.protocolVersion;
-      ros_header.messageId = header.messageID;
-      ros_header.stationId = header.stationID;
+      ros_header.messageId = header.messageId;
+      ros_header.stationId = header.stationId;
 
       cam_ts_CamPayload_t &coopAwareness = ts_cam.cam;
       coopAwareness.generationDeltaTime = cam.generationDeltaTime;
@@ -431,9 +431,9 @@ namespace v2x
       ros_basic_container.referencePosition.longitude = basic_container.referencePosition.longitude;
       ros_basic_container.referencePosition.altitude.altitudeValue = basic_container.referencePosition.altitude.altitudeValue;
       ros_basic_container.referencePosition.altitude.altitudeConfidence = basic_container.referencePosition.altitude.altitudeConfidence;
-      ros_basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisLength = basic_container.referencePosition.positionConfidenceEllipse.semiMajorConfidence;
-      ros_basic_container.referencePosition.positionConfidenceEllipse.semiMinorAxisLength = basic_container.referencePosition.positionConfidenceEllipse.semiMinorConfidence;
-      ros_basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisOrientation = basic_container.referencePosition.positionConfidenceEllipse.semiMajorOrientation;
+      ros_basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisLength = basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisLength;
+      ros_basic_container.referencePosition.positionConfidenceEllipse.semiMinorAxisLength = basic_container.referencePosition.positionConfidenceEllipse.semiMinorAxisLength;
+      ros_basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisOrientation = basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisOrientation;
 
       cam_ts_BasicVehicleContainerHighFrequency_t &ros_bvc = coopAwareness.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency;
       coopAwareness.camParameters.highFrequencyContainer.present = cam_ts_HighFrequencyContainer_PR_basicVehicleContainerHighFrequency;
@@ -445,8 +445,8 @@ namespace v2x
       ros_bvc.vehicleLength.vehicleLengthValue = bvc.vehicleLength.vehicleLengthValue;
       ros_bvc.vehicleLength.vehicleLengthConfidenceIndication = bvc.vehicleLength.vehicleLengthConfidenceIndication;
       ros_bvc.vehicleWidth = bvc.vehicleWidth;
-      ros_bvc.longitudinalAcceleration.value = bvc.longitudinalAcceleration.longitudinalAccelerationValue;
-      ros_bvc.longitudinalAcceleration.confidence = bvc.longitudinalAcceleration.longitudinalAccelerationConfidence;
+      ros_bvc.longitudinalAcceleration.value = bvc.longitudinalAcceleration.value;
+      ros_bvc.longitudinalAcceleration.confidence = bvc.longitudinalAcceleration.confidence;
       ros_bvc.curvature.curvatureValue = bvc.curvature.curvatureValue;
       ros_bvc.curvature.curvatureConfidence = bvc.curvature.curvatureConfidence;
       ros_bvc.curvatureCalculationMode = bvc.curvatureCalculationMode;
