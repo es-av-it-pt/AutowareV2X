@@ -24,7 +24,6 @@
 #include <etsi_its_cam_ts_msgs/msg/cam.hpp>
 #include <etsi_its_cam_ts_coding/cam_ts_CAM.h>
 #include <etsi_its_cam_ts_conversion/convertCAM.h>
-#include <etsi_its_msgs_utils/cam_ts_access.hpp>
 
 #include <boost/units/cmath.hpp>
 #include <boost/units/systems/si/prefixes.hpp>
