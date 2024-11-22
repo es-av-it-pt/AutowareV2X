@@ -34,7 +34,7 @@ include_directories(
   ${CMAKE_CURRENT_BINARY_DIR}/src
 )
 
-ament_auto_add_library(autoware_v2x SHARED
+set(SOURCES
   src/v2x_node.cpp
   src/v2x_app.cpp
   src/application.cpp
@@ -50,6 +50,34 @@ ament_auto_add_library(autoware_v2x SHARED
   src/positioning.cpp
   src/security.cpp
 )
+
+if(DEFINED BUILD_COHDA)
+  set(SEARCH_PATHS
+    "/usr/include/linux/cohda/llc"
+    "/usr/include/cohda/llc"
+  )
+  find_file(COHDA_LLC_API_HEADER llc-api.h
+    PATHS ${SEARCH_PATHS}
+    CMAKE_FIND_ROOT_PATH_BOTH
+    DOC "Cohda LLC API header"
+  )
+  mark_as_advanced(COHDA_LLC_API_HEADER)
+  if(COHDA_LLC_API_HEADER)
+    get_filename_component(COHDA_LLC_INCLUDE_DIR ${COHDA_LLC_API_HEADER} DIRECTORY)
+    include_directories(
+      include
+      ${CMAKE_CURRENT_BINARY_DIR}/src
+      ${COHDA_LLC_INCLUDE_DIR}
+    )
+    list(APPEND SOURCES src/cohda_link.cpp)
+    add_compile_definitions(BUILD_COHDA)
+  else()
+    string(REPLACE ";" " " SEARCH_PATHS_STR "${SEARCH_PATHS}")
+    message(WARNING "Cohda LLC API header not found, could not enable Cohda support.\nSearched in: ${SEARCH_PATHS_STR}")
+  endif()
+endif()
+
+ament_auto_add_library(autoware_v2x SHARED ${SOURCES})
 
 protobuf_generate(TARGET autoware_v2x PROTOS src/cube_evk_radio.proto)
 

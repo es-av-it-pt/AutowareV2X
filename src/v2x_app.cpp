@@ -16,6 +16,7 @@
 
 #include <vanetza/asn1/cpm.hpp>
 #include <vanetza/asn1/cam.hpp>
+#include <regex>
 #include <sstream>
 #include <memory>
 #include <GeographicLib/UTMUPS.hpp>
@@ -133,16 +134,45 @@ namespace v2x
     node_->get_parameter("link_layer", link_layer_name);
     RCLCPP_INFO(node_->get_logger(), "Link Layer: %s", link_layer_name.c_str());
 
-    std::string network_interface;
-    node_->get_parameter("network_interface", network_interface);
-    RCLCPP_INFO(node_->get_logger(), "Network Interface: %s", network_interface.c_str());
+#ifdef BUILD_COHDA
+    std::vector<std::string> valid_link_layers = {"ethernet", "cube-evk", "cohda"};
+#else
+    std::vector<std::string> valid_link_layers = {"ethernet", "cube-evk"};
+#endif
+    if (std::find(valid_link_layers.begin(), valid_link_layers.end(), link_layer_name) == valid_link_layers.end()) {
+      throw std::runtime_error("Invalid link layer: " + link_layer_name);
+    }
 
-    EthernetDevice device(network_interface.c_str());
-    vanetza::MacAddress mac_address = device.address();
+    std::string target_device;
+    node_->get_parameter("target_device", target_device);
+    const std::regex ip_pattern(R"(^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}$)");
+    bool is_ip = std::regex_match(target_device, ip_pattern);
+    RCLCPP_INFO(node_->get_logger(), "IS_IP: %d, Target Device: %s", is_ip, target_device.c_str());
+    if (!is_ip && !(link_layer_name == "ethernet" || link_layer_name == "cohda")) {
+      throw std::runtime_error("Invalid target device: " + target_device + "\nMust use ethernet link layer for network interface");
+    }
 
-    std::stringstream sout;
-    sout << mac_address;
-    RCLCPP_INFO(node_->get_logger(), "MAC Address: '%s'", sout.str().c_str());
+    vanetza::MacAddress mac_address;
+    std::unique_ptr<LinkLayer> link_layer;
+    if (!is_ip) {
+      EthernetDevice device(target_device.c_str());
+      mac_address = device.address();
+
+      std::stringstream sout;
+      sout << mac_address;
+      RCLCPP_INFO(node_->get_logger(), "MAC Address: '%s'", sout.str().c_str());
+
+      link_layer = create_link_layer(io_service, link_layer_name, device);
+      RCLCPP_INFO(node_->get_logger(), "Ethernet Device: %s", target_device.c_str());
+    } else {
+      if (link_layer_name == "cube-evk") {
+        link_layer = create_link_layer(io_service, link_layer_name, target_device);
+        RCLCPP_INFO(node_->get_logger(), "CubeEVK IP: %s", target_device.c_str());
+      } else {
+        throw std::runtime_error("Invalid link layer: " + link_layer_name);
+      }
+      mac_address = parse_mac_address("00:00:00:00:00:00").value();
+    }
 
     // Geonetworking Management Infirmation Base (MIB) defines the GN protocol constants.
     gn::MIB mib;
@@ -152,12 +182,6 @@ namespace v2x
     mib.itsGnSecurity = false;
     mib.itsGnProtocolVersion = 1;
 
-    std::string cube_ip;
-    node_->get_parameter("cube_ip", cube_ip);
-    RCLCPP_INFO(node_->get_logger(), "CubeEVK IP: %s", cube_ip.c_str());
-
-    // Create raw socket on device and LinkLayer object
-    auto link_layer =  create_link_layer(io_service, device, link_layer_name, cube_ip);
     auto positioning = create_position_provider(io_service, trigger.runtime());
 
     po::variables_map security_options;

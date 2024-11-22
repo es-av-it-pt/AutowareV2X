@@ -61,8 +61,7 @@ namespace v2x
 
     // Declare Parameters
     this->declare_parameter<std::string>("link_layer", "ethernet");
-    this->declare_parameter<std::string>("network_interface", "v2x_testing");
-    this->declare_parameter<std::string>("cube_ip", "127.0.0.1");
+    this->declare_parameter<std::string>("target_device", "lo");
     this->declare_parameter<bool>("is_sender", true);
     this->declare_parameter<bool>("publish_own_cams", true);
     this->declare_parameter<std::string>("security", "none");
