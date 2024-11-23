@@ -53,6 +53,7 @@ set(SOURCES
 
 if(DEFINED BUILD_COHDA)
   set(SEARCH_PATHS
+    "/v2x/cohda/llc"
     "/usr/include/linux/cohda/llc"
     "/usr/include/cohda/llc"
   )
