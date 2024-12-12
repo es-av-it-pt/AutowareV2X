@@ -32,6 +32,7 @@ find_package(Protobuf REQUIRED)
 include_directories(
   include
   ${CMAKE_CURRENT_BINARY_DIR}/src
+  ../etsi_its_messages/etsi_its_msgs_utils/include
 )
 
 set(SOURCES

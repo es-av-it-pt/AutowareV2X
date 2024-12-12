@@ -148,7 +148,11 @@ namespace v2x
     const std::regex ip_pattern(R"(^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.?\b){4}$)");
     bool is_ip = std::regex_match(target_device, ip_pattern);
     RCLCPP_INFO(node_->get_logger(), "IS_IP: %d, Target Device: %s", is_ip, target_device.c_str());
+#ifdef BUILD_COHDA
     if (!is_ip && !(link_layer_name == "ethernet" || link_layer_name == "cohda")) {
+#else
+    if (!is_ip && !(link_layer_name == "ethernet")) {
+#endif
       throw std::runtime_error("Invalid target device: " + target_device + "\nMust use ethernet link layer for network interface");
     }
 
