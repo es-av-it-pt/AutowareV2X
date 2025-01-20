@@ -276,7 +276,7 @@ namespace v2x
     Vanetza_ITS2_CamPayload_t &cam = message->cam;
 
     // Convert Unix timestamp to ETSI epoch (2004-01-01 00:00:00)
-    cam.generationDeltaTime = (long) ((now_ns.count() - 1072915200000000000ULL) % 65536);
+    cam.generationDeltaTime = cam.generationDeltaTime = static_cast<uint16_t>((now_ns.count() / 1000000 - 1072915200000ULL) % 65536);
 
     Vanetza_ITS2_BasicContainer_t &basic_container = cam.camParameters.basicContainer;
     basic_container.stationType = cam_ts_TrafficParticipantType_passengerCar;

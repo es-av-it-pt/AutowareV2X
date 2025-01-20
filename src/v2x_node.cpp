@@ -62,8 +62,10 @@ namespace v2x
     // Declare Parameters
     this->declare_parameter<std::string>("link_layer", "ethernet");
     this->declare_parameter<std::string>("target_device", "lo");
-    this->declare_parameter<bool>("is_sender", true);
-    this->declare_parameter<bool>("publish_own_cams", true);
+    this->declare_parameter<bool>("is_sender");
+    this->declare_parameter<bool>("publish_own_cams");
+    this->declare_parameter<bool>("cam_enabled");
+    this->declare_parameter<bool>("cpm_enabled");
     this->declare_parameter<std::string>("security", "none");
 
     // Launch V2XApp in a new thread

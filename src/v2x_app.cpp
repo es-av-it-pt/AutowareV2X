@@ -37,7 +37,7 @@ namespace v2x
     tf_received_(false),
     tf_interval_(0),
     vehicle_dimensions_set_(false),
-    cp_started_(false),
+    cpm_started_(false),
     cam_started_(false)
   {
   }
@@ -47,8 +47,8 @@ namespace v2x
     if (!tf_received_) {
       RCLCPP_WARN(node_->get_logger(), "[V2XApp::objectsCallback] tf not received yet");
     }
-    if (tf_received_ && cp_started_) {
-      cp->updateObjectsList(msg);
+    if (tf_received_ && cpm_started_) {
+      cpm->updateObjectsList(msg);
     }
   }
 
@@ -110,14 +110,14 @@ namespace v2x
       lon
     );
 
-    if (cp && cp_started_) {
-      cp->updateMGRS(&x, &y);
-      cp->updateRP(&lat, &lon, &z);
-      cp->updateHeading(&yaw);
-      cp->updateGenerationTime(&gdt, &timestamp_msec);
+    if (cpm && cpm_started_) {
+      cpm->updateMGRS(&x, &y);
+      cpm->updateRP(&lat, &lon, &z);
+      cpm->updateHeading(&yaw);
+      cpm->updateGenerationTime(&gdt, &timestamp_msec);
     }
 
-    if (cam && cp_started_) {
+    if (cam && cpm_started_) {
       cam->updateMGRS(&x, &y);
       cam->updateRP(&lat, &lon, &z);
       cam->updateHeading(&yaw);
@@ -217,17 +217,25 @@ namespace v2x
     context.set_link_layer(link_layer.get());
 
     bool is_sender;
-    bool publish_own_cams;
+    bool cam_enabled;
+    bool cpm_enabled;
     node_->get_parameter("is_sender", is_sender);
-    node_->get_parameter("publish_own_cams", publish_own_cams);
-    cp = new CpmApplication(node_, trigger.runtime(), is_sender);
-    cam = new CamApplication(node_, trigger.runtime(), is_sender, publish_own_cams);
+    node_->get_parameter("cam_enabled", cam_enabled);
+    node_->get_parameter("cpm_enabled", cpm_enabled);
 
-    context.enable(cp);
-    context.enable(cam);
+    if (cam_enabled) {
+      bool publish_own_cams;
+      node_->get_parameter("publish_own_cams", publish_own_cams);
+      cam = new CamApplication(node_, trigger.runtime(), is_sender, publish_own_cams);
+      context.enable(cam);
+      cam_started_ = true;
+    }
 
-    cp_started_ = true;
-    cam_started_ = true;
+    if (cpm_enabled) {
+      cpm = new CpmApplication(node_, trigger.runtime(), is_sender);
+      context.enable(cpm);
+      cpm_started_ = true;
+    }
 
     io_service.run();
   }

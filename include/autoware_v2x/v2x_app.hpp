@@ -33,7 +33,7 @@ namespace v2x
     void steeringReportCallback(const autoware_auto_vehicle_msgs::msg::SteeringReport::ConstSharedPtr);
     void tfCallback(const tf2_msgs::msg::TFMessage::ConstSharedPtr);
 
-    CpmApplication *cp;
+    CpmApplication *cpm;
     CamApplication *cam;
     // V2XNode *v2x_node;
 
@@ -45,7 +45,7 @@ namespace v2x
     bool tf_received_;
     int tf_interval_;
     bool vehicle_dimensions_set_;
-    bool cp_started_;
+    bool cpm_started_;
     bool cam_started_;
   };
 }
