@@ -117,7 +117,7 @@ namespace v2x
       cpm->updateGenerationTime(&gdt, &timestamp_msec);
     }
 
-    if (cam && cpm_started_) {
+    if (cam && cam_started_) {
       cam->updateMGRS(&x, &y);
       cam->updateRP(&lat, &lon, &z);
       cam->updateHeading(&yaw);
