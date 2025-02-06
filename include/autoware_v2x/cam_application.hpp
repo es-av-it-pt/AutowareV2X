@@ -23,12 +23,13 @@ class V2XNode;
 class CamApplication : public Application
 {
 public:
-  CamApplication(V2XNode *node, vanetza::Runtime &, bool is_sender, bool publish_own_cams);
+  CamApplication(V2XNode *node, vanetza::Runtime &rt, unsigned long stationId, bool is_sender, bool publish_own_cams);
   PortType port() override;
   void indicate(const DataIndication &, UpPacketPtr) override;
   void set_interval(vanetza::Clock::duration);
   void updateMGRS(double *, double *);
   void updateRP(const double *, const double *, const double *);
+  void updateConfidencePositionEllipse(const double *, const double *, const double *);
   void updateHeading(const double *);
   void setVehicleDimensions(const autoware_adapi_v1_msgs::msg::VehicleDimensions &);
   void updateVelocityReport(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr);
@@ -40,9 +41,9 @@ private:
   void calc_interval();
   void schedule_timer();
   void on_timer(vanetza::Clock::time_point);
-  static void build_etsi_its_cam_ts_from_vanetza(vanetza::asn1::Cam &, cam_ts_CAM_t &);
 
   V2XNode *node_;
+  unsigned long stationId_;
   vanetza::Runtime &runtime_;
   vanetza::Clock::duration cam_interval_{};
 
@@ -69,57 +70,10 @@ private:
   };
   Ego_station ego_;
 
-  class PositionsDeque {
-  public:
-    void insert(double value) {
-      if (deque.size() >= maxSize) {
-        total -= deque.front();
-        deque.pop_front();
-      }
-      total += value;
-      mean = total / deque.size();
-      deque.push_back(value);
-    }
-
-    int getSize() {
-      return deque.size();
-    }
-
-    [[nodiscard]] double getMean() const {
-      return this->mean;
-    }
-
-    using iterator = std::deque<double>::const_iterator;
-
-    [[nodiscard]] iterator begin() const {
-      return deque.begin();
-    }
-
-    [[nodiscard]] iterator end() const {
-      return deque.end();
-    }
-
-    double operator[](std::size_t index) const {
-      if (index >= deque.size())
-        throw std::out_of_range("[PositionDeque] Index out of range");
-      return deque[index];
-    }
-
-  private:
-    static const std::size_t maxSize = 5;
-    std::deque<double> deque;
-
-    double total = 0;
-    double mean = 0;
-  };
-
   struct PositionConfidenceEllipse {
-    PositionsDeque x;
-    PositionsDeque y;
-
-    double semiMajorConfidence{};
-    double semiMinorConfidence{};
-    double semiMajorOrientation{};
+    double majorAxisLength{};
+    double minorAxisLength{};
+    double majorAxisOrientation{};
   };
   PositionConfidenceEllipse positionConfidenceEllipse_;
 
@@ -142,8 +96,6 @@ private:
   bool sending_;
   bool is_sender_;
   bool publish_own_cams_;
-
-  unsigned long stationId_;
 
   bool use_dynamic_generation_rules_;
 };

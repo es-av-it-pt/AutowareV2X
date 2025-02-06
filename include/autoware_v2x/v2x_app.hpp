@@ -47,6 +47,60 @@ namespace v2x
     bool vehicle_dimensions_set_;
     bool cpm_started_;
     bool cam_started_;
+
+    class PositionsDeque {
+    public:
+      void insert(double value) {
+        if (deque.size() >= maxSize) {
+          total -= deque.front();
+          deque.pop_front();
+        }
+        total += value;
+        mean = total / deque.size();
+        deque.push_back(value);
+      }
+
+      int getSize() {
+        return deque.size();
+      }
+
+      [[nodiscard]] double getMean() const {
+        return this->mean;
+      }
+
+      using iterator = std::deque<double>::const_iterator;
+
+      [[nodiscard]] iterator begin() const {
+        return deque.begin();
+      }
+
+      [[nodiscard]] iterator end() const {
+        return deque.end();
+      }
+
+      double operator[](std::size_t index) const {
+        if (index >= deque.size())
+          throw std::out_of_range("[PositionDeque] Index out of range");
+        return deque[index];
+      }
+
+    private:
+      static const std::size_t maxSize = 5;
+      std::deque<double> deque;
+
+      double total = 0;
+      double mean = 0;
+    };
+
+    struct PositionConfidenceEllipse {
+      PositionsDeque x;
+      PositionsDeque y;
+
+      double majorAxisLength{};
+      double minorAxisLength{};
+      double majorAxisConfidence{};
+    };
+    PositionConfidenceEllipse positionConfidenceEllipse_;
   };
 }
 

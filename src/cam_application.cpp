@@ -16,7 +16,6 @@
 #include <iostream>
 #include <sstream>
 #include <exception>
-#include <random>
 #include <GeographicLib/UTMUPS.hpp>
 #include <GeographicLib/MGRS.hpp>
 #include <string>
@@ -36,7 +35,7 @@ using namespace std::chrono;
 
 namespace v2x
 {
-  CamApplication::CamApplication(V2XNode * node, Runtime & rt, bool is_sender, bool publish_own_cams)
+  CamApplication::CamApplication(V2XNode * node, Runtime & rt, unsigned long stationId, bool is_sender, bool publish_own_cams)
   : node_(node),
     runtime_(rt),
     cam_interval_(milliseconds(1000)),
@@ -51,15 +50,8 @@ namespace v2x
     use_dynamic_generation_rules_(true)
   {
     RCLCPP_INFO(node_->get_logger(), "CamApplication started. is_sender: %d, publish_own_cams: %d", is_sender_, publish_own_cams_);
+    stationId_ = stationId;
     set_interval(cam_interval_);
-    //createTables();
-
-    // Generate ID for this station
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<unsigned long> dis(0, 4294967295);
-    stationId_ = dis(gen);
-
     node_->getVehicleDimensions();
   }
 
@@ -200,9 +192,12 @@ namespace v2x
     ego_.latitude = *lat;
     ego_.longitude = *lon;
     ego_.altitude = *altitude;
+  }
 
-    positionConfidenceEllipse_.x.insert(*lat);
-    positionConfidenceEllipse_.y.insert(*lon);
+  void CamApplication::updateConfidencePositionEllipse(const double *majorAxis, const double *minorAxis, const double *orientation) {
+    positionConfidenceEllipse_.majorAxisLength = *majorAxis;
+    positionConfidenceEllipse_.minorAxisLength = *minorAxis;
+    positionConfidenceEllipse_.majorAxisOrientation = *orientation;
   }
 
   void CamApplication::updateHeading(const double *yaw) {
@@ -291,50 +286,12 @@ namespace v2x
     if (-100000 <= altitude && altitude <= 800000) basic_container.referencePosition.altitude.altitudeValue = altitude;
     else basic_container.referencePosition.altitude.altitudeValue = Vanetza_ITS2_AltitudeValue_unavailable;
 
-    // Articles consulted for the positionConficenceEllipse
-    // https://users.cs.utah.edu/~tch/CS4640F2019/resources/A%20geometric%20interpretation%20of%20the%20covariance%20matrix.pdf
-    // https://users.cs.utah.edu/~tch/CS6640F2020/resources/How%20to%20draw%20a%20covariance%20error%20ellipse.pdf
-    if (positionConfidenceEllipse_.x.getSize() == positionConfidenceEllipse_.y.getSize()) {
-      double xx_sum = 0;
-      double yy_sum = 0;
-      double xy_sum = 0;
-      for (double x : positionConfidenceEllipse_.x)
-        xx_sum += std::pow(x - positionConfidenceEllipse_.x.getMean(), 2);
-      for (double y : positionConfidenceEllipse_.y)
-        yy_sum += std::pow(y - positionConfidenceEllipse_.y.getMean(), 2);
-      for (int i = 0; i < positionConfidenceEllipse_.x.getSize(); i++)
-        xy_sum += (positionConfidenceEllipse_.x[i] - positionConfidenceEllipse_.x.getMean()) *
-                  (positionConfidenceEllipse_.y[i] - positionConfidenceEllipse_.y.getMean());
-
-      double sigma_xx = xx_sum / (positionConfidenceEllipse_.x.getSize() - 1);
-      double sigma_yy = yy_sum / (positionConfidenceEllipse_.y.getSize() - 1);
-      double sigma_xy = xy_sum / (positionConfidenceEllipse_.x.getSize() - 1);
-
-      double lambda1 = (sigma_xx + sigma_yy) - std::sqrt(std::pow(sigma_xx + sigma_yy, 2) - 4 * (sigma_xx * sigma_yy - sigma_xy * sigma_xy)) / 2;
-      double lambda2 = (sigma_xx + sigma_yy) + std::sqrt(std::pow(sigma_xx + sigma_yy, 2) - 4 * (sigma_xx * sigma_yy - sigma_xy * sigma_xy)) / 2;
-
-      double lambda_max = std::max(lambda1, lambda2);
-      double lambda_min = std::min(lambda1, lambda2);
-
-      // For 95% confidence level, must use 2.4477
-      double majorAxisLength = std::lround(2.4477 * std::sqrt(lambda_max));
-      double minorAxisLength = std::lround(2.4477 * std::sqrt(lambda_min));
-      double majorAxisOrientation = - (sigma_xy != 0
-                                   ? std::lround(std::atan(- (sigma_xx - lambda_max) / sigma_xy) * 180 / M_PI)
-                                   : sigma_xx != 0 ? 0 : -90) * 10;
-      if (majorAxisOrientation < 0) majorAxisOrientation += 3600;
-
-      if (0 <= majorAxisLength && majorAxisLength <= 4094) basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisLength = majorAxisLength;
-      else basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisLength = cam_ts_SemiAxisLength_unavailable;
-      if (0 <= minorAxisLength && minorAxisLength <= 4094) basic_container.referencePosition.positionConfidenceEllipse.semiMinorAxisLength = minorAxisLength;
-      else basic_container.referencePosition.positionConfidenceEllipse.semiMinorAxisLength = cam_ts_SemiAxisLength_unavailable;
-      if (0 <= majorAxisOrientation && majorAxisOrientation <= 3600) basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisOrientation = majorAxisOrientation;
-      else basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisOrientation = cam_ts_Wgs84AngleValue_unavailable;
-    } else {
-      basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisLength = cam_ts_SemiAxisLength_unavailable;
-      basic_container.referencePosition.positionConfidenceEllipse.semiMinorAxisLength = cam_ts_SemiAxisLength_unavailable;
-      basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisOrientation = cam_ts_Wgs84AngleValue_unavailable;
-    }
+    if (0 <= positionConfidenceEllipse_.majorAxisLength && positionConfidenceEllipse_.majorAxisLength <= 4094) basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisLength = positionConfidenceEllipse_.majorAxisLength;
+    else basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisLength = Vanetza_ITS2_SemiAxisLength_unavailable;
+    if (0 <= positionConfidenceEllipse_.minorAxisLength && positionConfidenceEllipse_.minorAxisLength <= 4094) basic_container.referencePosition.positionConfidenceEllipse.semiMinorAxisLength = positionConfidenceEllipse_.minorAxisLength;
+    else basic_container.referencePosition.positionConfidenceEllipse.semiMinorAxisLength = Vanetza_ITS2_SemiAxisLength_unavailable;
+    if (0 <= positionConfidenceEllipse_.majorAxisOrientation && positionConfidenceEllipse_.majorAxisOrientation <= 3600) basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisOrientation = positionConfidenceEllipse_.majorAxisOrientation;
+    else basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisOrientation = Vanetza_ITS2_Wgs84AngleConfidence_unavailable;
 
     Vanetza_ITS2_BasicVehicleContainerHighFrequency_t &bvc = cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency;
     cam.camParameters.highFrequencyContainer.present = Vanetza_ITS2_HighFrequencyContainer_PR_basicVehicleContainerHighFrequency;
@@ -394,7 +351,7 @@ namespace v2x
     bvc.yawRate.yawRateConfidence = YawRateConfidence_unavailable;
     // ------------------------------
 
-    RCLCPP_INFO(node_->get_logger(), "[CamApplication::send] Sending CAM from station with ID %ld with generationDeltaTime %ld, latitude %f, longitude %f, altitude %f",
+    RCLCPP_INFO(node_->get_logger(), "[CamApplication::send] Sending CAM from station #%ld with generationDeltaTime %ld, latitude %f, longitude %f, altitude %f",
             stationId_, cam.generationDeltaTime, ego_.latitude, ego_.longitude, ego_.altitude);
     std::unique_ptr<geonet::DownPacket> payload{new geonet::DownPacket()};
     payload->layer(OsiLayer::Application) = std::move(message);

@@ -60,13 +60,16 @@ namespace v2x
     cam_rec_pub_ = create_publisher<etsi_its_cam_ts_msgs::msg::CAM>("/v2x/cam_ts/received", rclcpp::QoS{10});
 
     // Declare Parameters
-    this->declare_parameter<std::string>("link_layer", "ethernet");
-    this->declare_parameter<std::string>("target_device", "lo");
+    this->declare_parameter<std::string>("link_layer");
+    this->declare_parameter<std::string>("target_device");
     this->declare_parameter<bool>("is_sender");
     this->declare_parameter<bool>("publish_own_cams");
     this->declare_parameter<bool>("cam_enabled");
     this->declare_parameter<bool>("cpm_enabled");
     this->declare_parameter<std::string>("security", "none");
+    this->declare_parameter<std::string>("certificate", "");
+    this->declare_parameter<std::string>("certificate-key", "");
+    this->declare_parameter<std::vector<std::string>>("certificate-chain", std::vector<std::string>());
 
     // Launch V2XApp in a new thread
     app = new V2XApp(this);

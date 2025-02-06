@@ -110,6 +110,51 @@ namespace v2x
       lon
     );
 
+    // Articles consulted for the positionConficenceEllipse
+    // https://users.cs.utah.edu/~tch/CS4640F2019/resources/A%20geometric%20interpretation%20of%20the%20covariance%20matrix.pdf
+    // https://users.cs.utah.edu/~tch/CS6640F2020/resources/How%20to%20draw%20a%20covariance%20error%20ellipse.pdf
+    if (positionConfidenceEllipse_.x.getSize() == positionConfidenceEllipse_.y.getSize()) {
+      double xx_sum = 0;
+      double yy_sum = 0;
+      double xy_sum = 0;
+      for (double x_p : positionConfidenceEllipse_.x)
+        xx_sum += std::pow(x_p - positionConfidenceEllipse_.x.getMean(), 2);
+      for (double y_p : positionConfidenceEllipse_.y)
+        yy_sum += std::pow(y_p - positionConfidenceEllipse_.y.getMean(), 2);
+      for (int i = 0; i < positionConfidenceEllipse_.x.getSize(); i++)
+        xy_sum += (positionConfidenceEllipse_.x[i] - positionConfidenceEllipse_.x.getMean()) *
+                  (positionConfidenceEllipse_.y[i] - positionConfidenceEllipse_.y.getMean());
+
+      double sigma_xx = xx_sum / (positionConfidenceEllipse_.x.getSize() - 1);
+      double sigma_yy = yy_sum / (positionConfidenceEllipse_.y.getSize() - 1);
+      double sigma_xy = xy_sum / (positionConfidenceEllipse_.x.getSize() - 1);
+
+      double lambda1 = (sigma_xx + sigma_yy) - std::sqrt(std::pow(sigma_xx + sigma_yy, 2) - 4 * (sigma_xx * sigma_yy - sigma_xy * sigma_xy)) / 2;
+      double lambda2 = (sigma_xx + sigma_yy) + std::sqrt(std::pow(sigma_xx + sigma_yy, 2) - 4 * (sigma_xx * sigma_yy - sigma_xy * sigma_xy)) / 2;
+
+      double lambda_max = std::max(lambda1, lambda2);
+      double lambda_min = std::min(lambda1, lambda2);
+
+      // For 95% confidence level, must use 2.4477
+      double majorAxisLength = std::lround(2.4477 * std::sqrt(lambda_max));
+      double minorAxisLength = std::lround(2.4477 * std::sqrt(lambda_min));
+      double majorAxisOrientation = - (sigma_xy != 0
+                                       ? std::lround(std::atan(- (sigma_xx - lambda_max) / sigma_xy) * 180 / M_PI)
+                                       : sigma_xx != 0 ? 0 : -90) * 10;
+      if (majorAxisOrientation < 0) majorAxisOrientation += 3600;
+
+      if (0 <= majorAxisLength && majorAxisLength <= 4094) positionConfidenceEllipse_.majorAxisLength = majorAxisLength;
+      else positionConfidenceEllipse_.majorAxisLength = Vanetza_ITS2_SemiAxisLength_unavailable;
+      if (0 <= minorAxisLength && minorAxisLength <= 4094) positionConfidenceEllipse_.minorAxisLength = minorAxisLength;
+      else positionConfidenceEllipse_.minorAxisLength = Vanetza_ITS2_SemiAxisLength_unavailable;
+      if (0 <= majorAxisOrientation && majorAxisOrientation <= 3600) positionConfidenceEllipse_.majorAxisConfidence = majorAxisOrientation;
+      else positionConfidenceEllipse_.majorAxisConfidence = Vanetza_ITS2_Wgs84AngleConfidence_unavailable;
+    } else {
+      positionConfidenceEllipse_.majorAxisLength = Vanetza_ITS2_SemiAxisLength_unavailable;
+      positionConfidenceEllipse_.minorAxisLength = Vanetza_ITS2_SemiAxisLength_unavailable;
+      positionConfidenceEllipse_.majorAxisConfidence = Vanetza_ITS2_Wgs84AngleConfidence_unavailable;
+    }
+
     if (cpm && cpm_started_) {
       cpm->updateMGRS(&x, &y);
       cpm->updateRP(&lat, &lon, &z);
@@ -120,12 +165,19 @@ namespace v2x
     if (cam && cam_started_) {
       cam->updateMGRS(&x, &y);
       cam->updateRP(&lat, &lon, &z);
+      cam->updateConfidencePositionEllipse(&positionConfidenceEllipse_.majorAxisLength, &positionConfidenceEllipse_.minorAxisLength, &positionConfidenceEllipse_.majorAxisConfidence);
       cam->updateHeading(&yaw);
     }
   }
 
   void V2XApp::start() {
     RCLCPP_INFO(node_->get_logger(), "V2X App Launched");
+
+    // Generate ID for this station
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<unsigned long> dis(0, 4294967295);
+    unsigned long stationId = dis(gen);
 
     boost::asio::io_service io_service;
     TimeTrigger trigger(io_service);
@@ -226,7 +278,7 @@ namespace v2x
     if (cam_enabled) {
       bool publish_own_cams;
       node_->get_parameter("publish_own_cams", publish_own_cams);
-      cam = new CamApplication(node_, trigger.runtime(), is_sender, publish_own_cams);
+      cam = new CamApplication(node_, trigger.runtime(), stationId, is_sender, publish_own_cams);
       context.enable(cam);
       cam_started_ = true;
     }
