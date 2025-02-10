@@ -35,7 +35,6 @@ namespace v2x
 
     CpmApplication *cpm;
     CamApplication *cam;
-    // V2XNode *v2x_node;
 
   private:
     friend class CpmApplication;

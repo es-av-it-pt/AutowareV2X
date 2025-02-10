@@ -52,7 +52,6 @@ namespace v2x
     RCLCPP_INFO(node_->get_logger(), "CamApplication started. is_sender: %d, publish_own_cams: %d", is_sender_, publish_own_cams_);
     stationId_ = stationId;
     set_interval(cam_interval_);
-    node_->getVehicleDimensions();
   }
 
   void CamApplication::set_interval(Clock::duration interval) {

@@ -45,6 +45,8 @@ namespace v2x
     void steeringReportCallback(const autoware_auto_vehicle_msgs::msg::SteeringReport::ConstSharedPtr msg);
     void tfCallback(const tf2_msgs::msg::TFMessage::ConstSharedPtr msg);
 
+    rclcpp::TimerBase::SharedPtr timer_;
+
     rclcpp::Subscription<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr objects_sub_;
     rclcpp::Subscription<autoware_auto_vehicle_msgs::msg::VelocityReport>::SharedPtr velocity_report_sub_;
     rclcpp::Subscription<autoware_auto_vehicle_msgs::msg::GearReport>::SharedPtr gear_report_sub_;
@@ -57,8 +59,6 @@ namespace v2x
 
     double pos_lat_;
     double pos_lon_;
-
-    bool vehicle_dimensions_available_;
   };
 }
 
