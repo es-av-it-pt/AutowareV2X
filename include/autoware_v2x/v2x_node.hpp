@@ -35,6 +35,7 @@ namespace v2x
     void publishCpmSenderObject(double, double, double);
     void publishReceivedCam(etsi_its_cam_ts_msgs::msg::CAM &);
     void getVehicleDimensions();
+    bool tfReceived();
 
     std::ofstream latency_log_file;
 
@@ -59,6 +60,8 @@ namespace v2x
 
     double pos_lat_;
     double pos_lon_;
+
+    bool tf_received_ = false;
   };
 }
 

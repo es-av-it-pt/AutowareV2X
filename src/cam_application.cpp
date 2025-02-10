@@ -248,6 +248,7 @@ namespace v2x
   }
 
   void CamApplication::send() {
+    if (!node_->tfReceived()) return;
     if (!is_sender_) return;
 
     if (sending_) {

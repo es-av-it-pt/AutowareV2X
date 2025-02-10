@@ -192,6 +192,11 @@ namespace v2x
 
   void V2XNode::tfCallback(const tf2_msgs::msg::TFMessage::ConstSharedPtr msg) {
     app->tfCallback(msg);
+    tf_received_ = true;
+  }
+
+  bool V2XNode::tfReceived() {
+    return tf_received_;
   }
 
   void V2XNode::velocityReportCallback(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr msg) {
