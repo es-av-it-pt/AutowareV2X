@@ -36,6 +36,7 @@ namespace v2x
     void publishReceivedCam(etsi_its_cam_ts_msgs::msg::CAM &);
     void getVehicleDimensions();
     bool tfReceived();
+    void getGpsData(double& latitude, double& longitude, double& altitude);
 
     std::ofstream latency_log_file;
 
@@ -45,6 +46,7 @@ namespace v2x
     void gearReportCallback(const autoware_auto_vehicle_msgs::msg::GearReport::ConstSharedPtr msg);
     void steeringReportCallback(const autoware_auto_vehicle_msgs::msg::SteeringReport::ConstSharedPtr msg);
     void tfCallback(const tf2_msgs::msg::TFMessage::ConstSharedPtr msg);
+    void runGpsClient(const std::string host, const std::string port);
 
     rclcpp::TimerBase::SharedPtr timer_;
 
@@ -58,8 +60,13 @@ namespace v2x
     rclcpp::Publisher<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr cpm_sender_pub_;
     rclcpp::Publisher<etsi_its_cam_ts_msgs::msg::CAM>::SharedPtr cam_rec_pub_;
 
-    double pos_lat_;
-    double pos_lon_;
+    struct GpsData {
+      double latitude;
+      double longitude;
+      double altitude;
+    };
+    GpsData gps_data_;
+    std::mutex gps_mutex_;
 
     bool tf_received_ = false;
   };

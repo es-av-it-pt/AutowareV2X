@@ -83,7 +83,17 @@ ament_auto_add_library(autoware_v2x SHARED ${SOURCES})
 
 protobuf_generate(TARGET autoware_v2x PROTOS src/cube_evk_radio.proto)
 
-target_link_libraries(autoware_v2x Vanetza::vanetza ${GeographicLib_LIBRARIES} Boost::thread Boost::program_options sqlite3 etsi_its_cam_ts_coding::etsi_its_cam_ts_coding etsi_its_cam_ts_conversion::etsi_its_cam_ts_conversion protobuf::libprotobuf)
+target_link_libraries(autoware_v2x
+  Vanetza::vanetza
+  ${GeographicLib_LIBRARIES}
+  Boost::thread
+  Boost::program_options
+  sqlite3
+  etsi_its_cam_ts_coding::etsi_its_cam_ts_coding
+  etsi_its_cam_ts_conversion::etsi_its_cam_ts_conversion
+  protobuf::libprotobuf
+  gps
+)
 
 rclcpp_components_register_node(autoware_v2x
   PLUGIN "v2x::V2XNode"

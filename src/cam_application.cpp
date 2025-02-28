@@ -3,6 +3,7 @@
 #include "autoware_v2x/security.hpp"
 #include "autoware_v2x/link_layer.hpp"
 #include "autoware_v2x/v2x_node.hpp"
+#include "autoware_v2x/utils/convert_cause_code.hpp"
 
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2/LinearMath/Matrix3x3.h"
@@ -150,6 +151,7 @@ namespace v2x
     RCLCPP_INFO(node_->get_logger(), "[CamApplication::indicate] Received CAM from station with ID #%ld at %ld epoch time", rec_cam->header.stationId, now_ms.count());
     vanetza::facilities::print_indented(std::cout, rec_cam, "  ", 0);
 
+    namespace cam_ts_msgs = etsi_its_cam_ts_msgs::msg;
     namespace access = etsi_its_cam_ts_msgs::access;
     cam_ts_msgs::CAM ros_cam;
 
@@ -178,6 +180,39 @@ namespace v2x
     access::setDriveDirection(ros_cam, bvc.driveDirection);
     access::setCurvatureValue(ros_cam, bvc.curvature.curvatureValue / 10, bvc.curvatureCalculationMode);
     access::setYawRateValue(ros_cam, bvc.yawRate.yawRateValue / 10);
+
+    Vanetza_ITS2_SpecialVehicleContainer_t *&svc = cam.camParameters.specialVehicleContainer;
+    if (svc) {
+      cam_ts_msgs::SpecialVehicleContainer ros_svc;
+
+      Vanetza_ITS2_SpecialVehicleContainer_PR &present = svc->present;
+      switch (present) {
+        case Vanetza_ITS2_SpecialVehicleContainer_PR_publicTransportContainer:
+          {
+            Vanetza_ITS2_PublicTransportContainer_t &ptc = svc->choice.publicTransportContainer;
+            ros_svc.public_transport_container.embarkation_status.value = ptc.embarkationStatus;
+          }
+          break;
+        case Vanetza_ITS2_SpecialVehicleContainer_PR_emergencyContainer:
+          {
+            Vanetza_ITS2_EmergencyContainer_t &ec = svc->choice.emergencyContainer;
+            ros_svc.emergency_container.light_bar_siren_in_use.set__value(std::vector<uint8_t>(ec.lightBarSirenInUse.buf, ec.lightBarSirenInUse.buf + ec.lightBarSirenInUse.size));
+            if (ec.emergencyPriority != nullptr) {
+              ros_svc.emergency_container.emergency_priority.set__value(std::vector<uint8_t>(ec.emergencyPriority->buf, ec.emergencyPriority->buf + ec.emergencyPriority->size));
+              ros_svc.emergency_container.emergency_priority_is_present = true;
+            }
+            if (ec.incidentIndication != nullptr) {
+              convert_cause_code_to_ros(ec.incidentIndication->ccAndScc, ros_svc.emergency_container.incident_indication.cc_and_scc);
+              ros_svc.emergency_container.incident_indication_is_present = true;
+            }
+          }
+          break;
+        default:
+          break;
+      }
+
+      ros_cam.cam.cam_parameters.special_vehicle_container = ros_svc;
+    }
 
     node_->publishReceivedCam(ros_cam);
   }
@@ -275,9 +310,11 @@ namespace v2x
 
     Vanetza_ITS2_BasicContainer_t &basic_container = cam.camParameters.basicContainer;
     basic_container.stationType = cam_ts_TrafficParticipantType_passengerCar;
-    float latitude = ego_.latitude * 1e7;
-    float longitude = ego_.longitude * 1e7;
-    float altitude = ego_.altitude * 100;
+    double latitude, longitude, altitude;
+    node_->getGpsData(latitude, longitude, altitude);
+    latitude *= 1e7;
+    longitude *= 1e7;
+    altitude *= 100;
 
     if (-900000000 <= latitude && latitude <= 900000000) basic_container.referencePosition.latitude = latitude;
     else basic_container.referencePosition.latitude = Vanetza_ITS2_Latitude_unavailable;
@@ -352,7 +389,7 @@ namespace v2x
     // ------------------------------
 
     RCLCPP_INFO(node_->get_logger(), "[CamApplication::send] Sending CAM from station #%ld with generationDeltaTime %ld, latitude %f, longitude %f, altitude %f",
-            stationId_, cam.generationDeltaTime, ego_.latitude, ego_.longitude, ego_.altitude);
+            stationId_, cam.generationDeltaTime, latitude / 1e7, longitude / 1e7, altitude / 100);
     std::unique_ptr<geonet::DownPacket> payload{new geonet::DownPacket()};
     payload->layer(OsiLayer::Application) = std::move(message);
 

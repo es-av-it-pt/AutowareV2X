@@ -1,30 +1,33 @@
 #include "autoware_v2x/v2x_node.hpp"
-#include "autoware_v2x/v2x_app.hpp"
-#include "autoware_v2x/time_trigger.hpp"
-#include "autoware_v2x/router_context.hpp"
-#include "autoware_v2x/positioning.hpp"
-#include "autoware_v2x/security.hpp"
-#include "autoware_v2x/link_layer.hpp"
-#include "autoware_v2x/cpm_application.hpp"
+
 #include "autoware_v2x/cam_application.hpp"
-
-#include "autoware_adapi_v1_msgs/srv/get_vehicle_dimensions.hpp"
-#include "autoware_adapi_v1_msgs/msg/vehicle_dimensions.hpp"
-
+#include "autoware_v2x/cpm_application.hpp"
+#include "autoware_v2x/link_layer.hpp"
+#include "autoware_v2x/positioning.hpp"
+#include "autoware_v2x/router_context.hpp"
+#include "autoware_v2x/security.hpp"
+#include "autoware_v2x/time_trigger.hpp"
+#include "autoware_v2x/v2x_app.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "tf2/LinearMath/Quaternion.h"
+
+#include <vanetza/asn1/cam.hpp>
+#include <vanetza/asn1/cpm.hpp>
+
+#include "autoware_adapi_v1_msgs/msg/vehicle_dimensions.hpp"
+#include "autoware_adapi_v1_msgs/srv/get_vehicle_dimensions.hpp"
 #include "std_msgs/msg/string.hpp"
 
-#include <vanetza/asn1/cpm.hpp>
-#include <vanetza/asn1/cam.hpp>
-#include <sstream>
-#include <memory>
-#include <boost/thread.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/thread.hpp>
 
-#include "tf2/LinearMath/Quaternion.h"
+#include <gps.h>
+
 #include <chrono>
 #include <iostream>
+#include <memory>
 #include <random>
+#include <sstream>
 
 namespace gn = vanetza::geonet;
 
@@ -56,6 +59,8 @@ namespace v2x
     // Declare Parameters
     this->declare_parameter<std::string>("link_layer");
     this->declare_parameter<std::string>("target_device");
+    this->declare_parameter<std::string>("gpsd_host", "127.0.0.1");
+    this->declare_parameter<std::string>("gpsd_port", "2947");
     this->declare_parameter<bool>("is_sender");
     this->declare_parameter<bool>("publish_own_cams");
     this->declare_parameter<bool>("cam_enabled");
@@ -64,6 +69,11 @@ namespace v2x
     this->declare_parameter<std::string>("certificate", "");
     this->declare_parameter<std::string>("certificate-key", "");
     this->declare_parameter<std::vector<std::string>>("certificate-chain", std::vector<std::string>());
+
+    std::string gpsd_host, gpsd_port;
+    this->get_parameter("gpsd_host", gpsd_host);
+    this->get_parameter("gpsd_port", gpsd_port);
+    boost::thread gps(boost::bind(&V2XNode::runGpsClient, this, gpsd_host, gpsd_port));
 
     // Launch V2XApp in a new thread
     app = new V2XApp(this);
@@ -240,6 +250,43 @@ namespace v2x
         RCLCPP_ERROR(get_logger(), "[V2XNode::getVehicleDimensions] Service call of /api/vehicle/dimensions failed: %s", e.what());
       }
     });
+  }
+
+  void V2XNode::getGpsData(double& latitude, double& longitude, double& altitude) {
+    std::lock_guard<std::mutex> lock(gps_mutex_);
+    latitude = gps_data_.latitude;
+    longitude = gps_data_.longitude;
+    altitude = gps_data_.altitude;
+  }
+
+  void V2XNode::runGpsClient(const std::string host, const std::string port) {
+    struct gps_data_t gps_data;
+
+    if (0 != gps_open(host.c_str(), port.c_str(), &gps_data)) {
+      RCLCPP_FATAL(get_logger(), "Failed to open gpsd on %s:%s", host.c_str(), port.c_str());
+      return;
+    }
+
+    (void)gps_stream(&gps_data, WATCH_ENABLE | WATCH_JSON, NULL);
+
+    while (gps_waiting(&gps_data, 5000000)) {
+      if (-1 == gps_read(&gps_data, NULL, 0)) {
+        RCLCPP_FATAL(get_logger(), "Failed to read gpsd on %s:%s", host.c_str(), port.c_str());
+        return;
+      }
+      if (MODE_SET != (MODE_SET & gps_data.set)) {
+          continue;
+      }
+      if (isfinite(gps_data.fix.latitude) && isfinite(gps_data.fix.longitude)) {
+        std::lock_guard<std::mutex> lock(gps_mutex_);
+        gps_data_.latitude = gps_data.fix.latitude;
+        gps_data_.longitude = gps_data.fix.longitude;
+        gps_data_.altitude = gps_data.fix.altitude;
+      }
+    }
+
+    (void)gps_stream(&gps_data, WATCH_DISABLE, NULL);
+    (void)gps_close(&gps_data);
   }
 }
 
