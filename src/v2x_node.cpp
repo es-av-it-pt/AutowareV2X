@@ -28,6 +28,7 @@
 #include <memory>
 #include <random>
 #include <sstream>
+#include <regex>
 
 namespace gn = vanetza::geonet;
 
@@ -46,7 +47,6 @@ namespace v2x
     objects_sub_ = this->create_subscription<autoware_auto_perception_msgs::msg::PredictedObjects>("/perception/object_recognition/objects", 10, std::bind(&V2XNode::objectsCallback, this, _1));
     tf_sub_ = this->create_subscription<tf2_msgs::msg::TFMessage>("/tf", 10, std::bind(&V2XNode::tfCallback, this, _1));
 
-    // Topic subscriptions for CAMApplication
     velocity_report_sub_ = this->create_subscription<autoware_auto_vehicle_msgs::msg::VelocityReport>("/vehicle/status/velocity_status", 10, std::bind(&V2XNode::velocityReportCallback, this, _1));
     gear_report_sub_ = this->create_subscription<autoware_auto_vehicle_msgs::msg::GearReport>("/vehicle/status/gear_status", 10, std::bind(&V2XNode::gearReportCallback, this, _1));
     steering_report_sub_ = this->create_subscription<autoware_auto_vehicle_msgs::msg::SteeringReport>("/vehicle/status/steering_status", 10, std::bind(&V2XNode::steeringReportCallback, this, _1));
@@ -59,8 +59,8 @@ namespace v2x
     // Declare Parameters
     this->declare_parameter<std::string>("link_layer");
     this->declare_parameter<std::string>("target_device");
-    this->declare_parameter<std::string>("gpsd_host", "127.0.0.1");
-    this->declare_parameter<std::string>("gpsd_port", "2947");
+    this->declare_parameter<std::string>("gps_method");
+    this->declare_parameter<std::string>("gps_provider");
     this->declare_parameter<bool>("is_sender");
     this->declare_parameter<bool>("publish_own_cams");
     this->declare_parameter<bool>("cam_enabled");
@@ -70,10 +70,26 @@ namespace v2x
     this->declare_parameter<std::string>("certificate-key", "");
     this->declare_parameter<std::vector<std::string>>("certificate-chain", std::vector<std::string>());
 
-    std::string gpsd_host, gpsd_port;
-    this->get_parameter("gpsd_host", gpsd_host);
-    this->get_parameter("gpsd_port", gpsd_port);
-    boost::thread gps(boost::bind(&V2XNode::runGpsClient, this, gpsd_host, gpsd_port));
+    std::string gps_method, gps_provider;
+    this->get_parameter("gps_method", gps_method);
+    this->get_parameter("gps_provider", gps_provider);
+    if (gps_method == "gpsd") {
+      std::string gpsd_host, gpsd_port;
+      std::istringstream iss(gps_provider);
+      std::getline(iss, gpsd_host, ':');
+      std::getline(iss, gpsd_port, ':');
+      if (gpsd_host.empty() || gpsd_port.empty()) {
+        throw std::runtime_error("Invalid gps_provider value for gpsd method");
+      }
+      boost::thread gps(boost::bind(&V2XNode::runGpsClient, this, gpsd_host, gpsd_port));
+      RCLCPP_INFO(get_logger(), "GPS Client Launched on %s:%s", gpsd_host.c_str(), gpsd_port.c_str());
+    } else {
+      const std::regex ros_topic_regex("^(\\/|[a-zA-Z])[\\w\\/]*[^\\/]$");
+      if (!std::regex_match(gps_provider, ros_topic_regex)) {
+        throw std::runtime_error("Invalid gps_provider value for ros topic method");
+      }
+      gps_sub_ = this->create_subscription<gps_msgs::msg::GPSFix>(gps_provider, 10, std::bind(&V2XNode::gpsFixCallback, this, _1));
+    }
 
     // Launch V2XApp in a new thread
     app = new V2XApp(this);
@@ -189,6 +205,15 @@ namespace v2x
     cam_rec_pub_->publish(msg);
   }
 
+  void V2XNode::gpsFixCallback(const gps_msgs::msg::GPSFix::ConstSharedPtr msg) {
+    if (!positioning_received_) positioning_received_ = true;
+
+    gps_data_.timestamp = std::chrono::system_clock::now();
+    gps_data_.latitude = msg->latitude;
+    gps_data_.longitude = msg->longitude;
+    gps_data_.altitude = msg->altitude;
+  }
+
   void V2XNode::objectsCallback(const autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr msg) {
     rclcpp::Time msg_time = msg->header.stamp; // timestamp included in the Autoware Perception Msg.
 
@@ -202,11 +227,10 @@ namespace v2x
 
   void V2XNode::tfCallback(const tf2_msgs::msg::TFMessage::ConstSharedPtr msg) {
     app->tfCallback(msg);
-    tf_received_ = true;
   }
 
-  bool V2XNode::tfReceived() {
-    return tf_received_;
+  bool V2XNode::positioningReceived() {
+    return positioning_received_;
   }
 
   void V2XNode::velocityReportCallback(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr msg) {
@@ -223,7 +247,7 @@ namespace v2x
 
   void V2XNode::getVehicleDimensions() {
     if (!get_vehicle_dimensions_->service_is_ready()) {
-      RCLCPP_ERROR(get_logger(), "[V2XNode::getVehicleDimensions] Service /api/vehicle/dimensions is not yet available");
+      RCLCPP_WARN(get_logger(), "[V2XNode::getVehicleDimensions] Service /api/vehicle/dimensions is not yet available");
       return;
     }
 
@@ -253,7 +277,6 @@ namespace v2x
   }
 
   void V2XNode::getGpsData(double& latitude, double& longitude, double& altitude) {
-    std::lock_guard<std::mutex> lock(gps_mutex_);
     latitude = gps_data_.latitude;
     longitude = gps_data_.longitude;
     altitude = gps_data_.altitude;
@@ -263,26 +286,23 @@ namespace v2x
     struct gps_data_t gps_data;
 
     if (0 != gps_open(host.c_str(), port.c_str(), &gps_data)) {
-      RCLCPP_FATAL(get_logger(), "Failed to open gpsd on %s:%s", host.c_str(), port.c_str());
-      return;
+      throw std::runtime_error("Failed to open gpsd on " + host + ":" + port);
     }
 
     (void)gps_stream(&gps_data, WATCH_ENABLE | WATCH_JSON, NULL);
 
     while (gps_waiting(&gps_data, 5000000)) {
       if (-1 == gps_read(&gps_data, NULL, 0)) {
-        RCLCPP_FATAL(get_logger(), "Failed to read gpsd on %s:%s", host.c_str(), port.c_str());
-        return;
+        throw std::runtime_error("Failed to read gpsd on " + host + ":" + port);
       }
       if (MODE_SET != (MODE_SET & gps_data.set)) {
           continue;
       }
-      if (isfinite(gps_data.fix.latitude) && isfinite(gps_data.fix.longitude)) {
-        std::lock_guard<std::mutex> lock(gps_mutex_);
-        gps_data_.latitude = gps_data.fix.latitude;
-        gps_data_.longitude = gps_data.fix.longitude;
-        gps_data_.altitude = gps_data.fix.altitude;
-      }
+      if (!positioning_received_) positioning_received_ = true;
+      gps_data_.timestamp = std::chrono::system_clock::now();
+      gps_data_.latitude = gps_data.fix.latitude;
+      gps_data_.longitude = gps_data.fix.longitude;
+      gps_data_.altitude = gps_data.fix.altitude;
     }
 
     (void)gps_stream(&gps_data, WATCH_DISABLE, NULL);

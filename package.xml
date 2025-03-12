@@ -17,6 +17,7 @@
   <depend>geometry_msgs</depend>
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
+  <depend>gps_msgs</depend>
   <depend>rclcpp_components</depend>
   <depend>Vanetza</depend>
   <depend>etsi_its_messages</depend>

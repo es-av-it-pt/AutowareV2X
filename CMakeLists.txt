@@ -27,6 +27,7 @@ find_package(etsi_its_cam_ts_coding REQUIRED)
 find_package(etsi_its_cam_ts_conversion REQUIRED)
 ament_auto_find_build_dependencies()
 find_package(std_msgs REQUIRED)
+find_package(gps_msgs REQUIRED)
 find_package(Protobuf REQUIRED)
 
 include_directories(

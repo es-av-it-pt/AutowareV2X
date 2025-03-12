@@ -3,6 +3,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/string.hpp"
+#include <gps_msgs/msg/gps_fix.hpp>
 #include "autoware_auto_perception_msgs/msg/predicted_objects.hpp"
 #include "autoware_auto_vehicle_msgs/msg/velocity_report.hpp"
 #include "autoware_auto_vehicle_msgs/msg/gear_report.hpp"
@@ -35,12 +36,13 @@ namespace v2x
     void publishCpmSenderObject(double, double, double);
     void publishReceivedCam(etsi_its_cam_ts_msgs::msg::CAM &);
     void getVehicleDimensions();
-    bool tfReceived();
+    bool positioningReceived();
     void getGpsData(double& latitude, double& longitude, double& altitude);
 
     std::ofstream latency_log_file;
 
   private:
+    void gpsFixCallback(const gps_msgs::msg::GPSFix::ConstSharedPtr msg);
     void objectsCallback(const autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr msg);
     void velocityReportCallback(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr msg);
     void gearReportCallback(const autoware_auto_vehicle_msgs::msg::GearReport::ConstSharedPtr msg);
@@ -50,6 +52,7 @@ namespace v2x
 
     rclcpp::TimerBase::SharedPtr timer_;
 
+    rclcpp::Subscription<gps_msgs::msg::GPSFix>::SharedPtr gps_sub_;
     rclcpp::Subscription<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr objects_sub_;
     rclcpp::Subscription<autoware_auto_vehicle_msgs::msg::VelocityReport>::SharedPtr velocity_report_sub_;
     rclcpp::Subscription<autoware_auto_vehicle_msgs::msg::GearReport>::SharedPtr gear_report_sub_;
@@ -61,14 +64,14 @@ namespace v2x
     rclcpp::Publisher<etsi_its_cam_ts_msgs::msg::CAM>::SharedPtr cam_rec_pub_;
 
     struct GpsData {
+      std::chrono::time_point<std::chrono::system_clock> timestamp;
       double latitude;
       double longitude;
       double altitude;
     };
     GpsData gps_data_;
-    std::mutex gps_mutex_;
 
-    bool tf_received_ = false;
+    bool positioning_received_ = false;
   };
 }
 

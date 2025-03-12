@@ -283,7 +283,7 @@ namespace v2x
   }
 
   void CamApplication::send() {
-    if (!node_->tfReceived()) return;
+    if (!node_->positioningReceived()) return;
     if (!is_sender_) return;
 
     if (sending_) {
