@@ -17,13 +17,15 @@ The V2XNode launches a ROS2 Node for AutowareV2X. Its main purpose is to act as 
 
 ### Input
 
-| Name                                     | Type                                                   | Description                                 |
-|------------------------------------------|--------------------------------------------------------|---------------------------------------------|
-| `/perception/object_recognition/objects` | `autoware_auto_perception_msgs::msg::PredictedObjects` | Perceived Objects by Autoware               |
-| `/tf`                                    | `tf2_msgs::msg::TFMessage`                             | Pose of Ego Vehicle                         |
-| `/vehicle/status/velocity_report`        | `autoware_auto_vehicle_msgs::msg::VelocityReport`      | Velocity of Ego Vehicle                     |
-| `/api/vehicle/status`                    | `autoware_adapi_v1_msgs::msg::VehicleStatus`           | Vehicle Status (gear, steering angle, etc.) |
-| `/api/vehicle/dimensions`                | `autoware_adapi_v1_msgs::srv::GetVehicleDimensions`    | Service to get Vehicle Dimensions           |
+| Name                                     | Type                                                   | Description                       |
+|------------------------------------------|--------------------------------------------------------|-----------------------------------|
+| `/perception/object_recognition/objects` | `autoware_auto_perception_msgs::msg::PredictedObjects` | Perceived Objects by Autoware     |
+| `/tf`                                    | `tf2_msgs::msg::TFMessage`                             | Pose of Ego Vehicle               |
+| `/sensing/gnss/gps`                      | `gps_msgs::msg::GPSFix`                                | GPS Position of Ego Vehicle       |
+| `/vehicle/status/velocity_report`        | `autoware_auto_vehicle_msgs::msg::VelocityReport`      | Velocity of Ego Vehicle           |
+| `/vehicle/status/gear_report`            | `autoware_auto_vehicle_msgs::msg::GearReport`          | Gear of Ego Vehicle               |
+| `/vehicle/status/steering_report`        | `autoware_auto_vehicle_msgs::msg::SteeringReport`      | Steering of Ego Vehicle           |
+| `/api/vehicle/dimensions`                | `autoware_adapi_v1_msgs::srv::GetVehicleDimensions`    | Service to get Vehicle Dimensions |
 
 ### Output
 
@@ -34,16 +36,21 @@ The V2XNode launches a ROS2 Node for AutowareV2X. Its main purpose is to act as 
 
 ### Functions
 
-| Name                                                                                              | Description                                                |
-|---------------------------------------------------------------------------------------------------|------------------------------------------------------------|
-| `objectsCallback(const autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr msg)` | Call `V2XApp::objectsCallback`                             |
-| `tfCallback`                                                                                      | Call `V2XApp::tfCallback`                                  |
-| `velocityReportCallback`                                                                          | Call `V2XApp::velocityReportCallback`                      |
-| `vehicleStatusCallback`                                                                           | Call `V2XApp::vehicleStatusCallback`                       |
-| `getVehicleDimensions`                                                                            | Sends a request to the service used for vehicle dimensions |
-| `publishObjects(std::vector<CpmApplication::Object> *objectsStack, int cpm_num)`                  |                                                            |
-| `publishCpmSenderObject`                                                                          | Not used now                                               |
-| `publishReceivedCam(etsi_its_cam_ts_msgs::msg::CAM &msg)`                                         | Publishes a received CAM into the ROS environment          |
+| Name                                                                                                | Description                                                |
+|-----------------------------------------------------------------------------------------------------|------------------------------------------------------------|
+| `objectsCallback(const autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr msg)`   | Call `V2XApp::objectsCallback`                             |
+| `gpsFixCallback(const gps_msgs::msg::GPSFix::ConstSharedPtr msg)`                                   | Call `V2XApp::gpsFixCallback` (when using ros topic)       |
+| `tfCallback(const tf2_msgs::msg::TFMessage::ConstSharedPtr msg)`                                    | Call `V2XApp::tfCallback`                                  |
+| `velocityReportCallback(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr msg)` | Call `V2XApp::velocityReportCallback`                      |
+| `gearReportCallback(const autoware_auto_vehicle_msgs::msg::GearReport::ConstSharedPtr msg)`         | Call `V2XApp::gearReportCallback`                          |
+| `steeringReportCallback(const autoware_auto_vehicle_msgs::msg::SteeringReport::ConstSharedPtr msg)` | Call `V2XApp::steeringReportCallback`                      |
+| `getVehicleDimensions()`                                                                            | Sends a request to the service used for vehicle dimensions |
+| `publishObjects(std::vector<CpmApplication::Object> *objectsStack, int cpm_num)`                    |                                                            |
+| `publishCpmSenderObject`                                                                            | Not used now                                               |
+| `publishReceivedCam(etsi_its_cam_ts_msgs::msg::CAM &msg)`                                           | Publishes a received CAM into the ROS environment          |
+| `runGpsClient(const std::string host, const std::string port)`                                      | Runs the GPS client                                        |
+| `getGpsData(double &latitude, double &longitude, double &altitude)`                                 | Gets the GPS data                                          |
+| `positioningReceived()`                                                                             | Whether the positioning is received or not                 |
 
 
 ## V2XApp
