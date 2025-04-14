@@ -23,7 +23,7 @@ class V2XNode;
 class CamApplication : public Application
 {
 public:
-  CamApplication(V2XNode *node, vanetza::Runtime &rt, unsigned long stationId, bool is_sender, bool publish_own_cams);
+  CamApplication(V2XNode *node, vanetza::Runtime &rt, unsigned long stationId, bool is_sender);
   PortType port() override;
   void indicate(const DataIndication &, UpPacketPtr) override;
   void set_interval(vanetza::Clock::duration);
@@ -95,7 +95,6 @@ private:
 
   bool sending_;
   bool is_sender_;
-  bool publish_own_cams_;
 
   bool use_dynamic_generation_rules_;
 };

@@ -35,6 +35,7 @@ namespace v2x
     void publishObjects(std::vector<CpmApplication::Object> *, int cpm_num);
     void publishCpmSenderObject(double, double, double);
     void publishReceivedCam(etsi_its_cam_ts_msgs::msg::CAM &);
+    void publishSentCam(etsi_its_cam_ts_msgs::msg::CAM &);
     void getVehicleDimensions();
     bool positioningReceived();
     void getGpsData(double& latitude, double& longitude, double& altitude);
@@ -62,6 +63,7 @@ namespace v2x
     rclcpp::Publisher<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr cpm_objects_pub_;
     rclcpp::Publisher<autoware_auto_perception_msgs::msg::PredictedObjects>::SharedPtr cpm_sender_pub_;
     rclcpp::Publisher<etsi_its_cam_ts_msgs::msg::CAM>::SharedPtr cam_rec_pub_;
+    rclcpp::Publisher<etsi_its_cam_ts_msgs::msg::CAM>::SharedPtr cam_sent_pub_;
 
     struct GpsData {
       std::chrono::time_point<std::chrono::system_clock> timestamp;

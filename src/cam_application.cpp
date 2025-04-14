@@ -36,7 +36,7 @@ using namespace std::chrono;
 
 namespace v2x
 {
-  CamApplication::CamApplication(V2XNode * node, Runtime & rt, unsigned long stationId, bool is_sender, bool publish_own_cams)
+  CamApplication::CamApplication(V2XNode * node, Runtime & rt, unsigned long stationId, bool is_sender)
   : node_(node),
     runtime_(rt),
     cam_interval_(milliseconds(1000)),
@@ -47,10 +47,9 @@ namespace v2x
     vehicleStatus_(),
     sending_(false),
     is_sender_(is_sender),
-    publish_own_cams_(publish_own_cams),
     use_dynamic_generation_rules_(true)
   {
-    RCLCPP_INFO(node_->get_logger(), "CamApplication started. is_sender: %d, publish_own_cams: %d", is_sender_, publish_own_cams_);
+    RCLCPP_INFO(node_->get_logger(), "CamApplication started. is_sender: %s", is_sender_ ? "yes" : "no");
     stationId_ = stationId;
     set_interval(cam_interval_);
   }
@@ -404,39 +403,32 @@ namespace v2x
       throw std::runtime_error("[CamApplication::send] CAM application data request failed");
     }
 
-    if (publish_own_cams_) {
-      namespace access = etsi_its_cam_ts_msgs::access;
-      cam_ts_msgs::CAM ros_cam;
+    namespace access = etsi_its_cam_ts_msgs::access;
+    cam_ts_msgs::CAM ros_cam;
 
-      access::setItsPduHeader(ros_cam, header.stationId, header.protocolVersion);
-      access::setGenerationDeltaTime(ros_cam, now_ns.count(), 0);
-      access::setStationType(ros_cam, basic_container.stationType);
-      access::setReferencePosition(ros_cam,
-                                   basic_container.referencePosition.latitude / 1e7,
-                                   basic_container.referencePosition.longitude / 1e7,
-                                   basic_container.referencePosition.altitude.altitudeValue / 1e2,
-                                   basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisLength / 1e1,
-                                   basic_container.referencePosition.positionConfidenceEllipse.semiMinorAxisLength / 1e1,
-                                   basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisOrientation / 1e2);
-      access::setHeading(ros_cam, bvc.heading.headingValue / 10);
-      access::setSpeed(ros_cam, bvc.speed.speedValue / 100);
-      access::setVehicleDimensions(ros_cam, bvc.vehicleLength.vehicleLengthValue / 10, bvc.vehicleWidth / 10);
-      access::setLongitudinalAcceleration(ros_cam, bvc.longitudinalAcceleration.value / 10);
-      access::setDriveDirection(ros_cam, bvc.driveDirection);
-      access::setCurvatureValue(ros_cam, bvc.curvature.curvatureValue / 10, bvc.curvatureCalculationMode);
-      access::setYawRateValue(ros_cam, bvc.yawRate.yawRateValue / 10);
+    access::setItsPduHeader(ros_cam, header.stationId, header.protocolVersion);
+    access::setGenerationDeltaTime(ros_cam, now_ns.count(), 0);
+    access::setStationType(ros_cam, basic_container.stationType);
+    access::setReferencePosition(ros_cam,
+                                 basic_container.referencePosition.latitude / 1e7,
+                                 basic_container.referencePosition.longitude / 1e7,
+                                 basic_container.referencePosition.altitude.altitudeValue / 1e2,
+                                 basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisLength / 1e1,
+                                 basic_container.referencePosition.positionConfidenceEllipse.semiMinorAxisLength / 1e1,
+                                 basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisOrientation / 1e2);
+    access::setHeading(ros_cam, bvc.heading.headingValue / 10);
+    access::setSpeed(ros_cam, bvc.speed.speedValue / 100);
+    access::setVehicleDimensions(ros_cam, bvc.vehicleLength.vehicleLengthValue / 10, bvc.vehicleWidth / 10);
+    access::setLongitudinalAcceleration(ros_cam, bvc.longitudinalAcceleration.value / 10);
+    access::setDriveDirection(ros_cam, bvc.driveDirection);
+    access::setCurvatureValue(ros_cam, bvc.curvature.curvatureValue / 10, bvc.curvatureCalculationMode);
+    access::setYawRateValue(ros_cam, bvc.yawRate.yawRateValue / 10);
 
-      node_->publishReceivedCam(ros_cam);
-      RCLCPP_INFO(node_->get_logger(), "[CamApplication::send] Published own CAM to ROS network");
-    }
+    node_->publishSentCam(ros_cam);
 
     RCLCPP_INFO(node_->get_logger(), "[CamApplication::send] Successfully sent");
 
     sending_ = false;
-
-    std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds> (
-      std::chrono::system_clock::now().time_since_epoch()
-    );
   }
 
 }

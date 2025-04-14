@@ -55,6 +55,7 @@ namespace v2x
     // cpm_sender_pub_ = create_publisher<autoware_auto_perception_msgs::msg::PredictedObjects>("/v2x/cpm/sender", rclcpp::QoS{10});
 
     cam_rec_pub_ = create_publisher<etsi_its_cam_ts_msgs::msg::CAM>("/v2x/cam_ts/received", rclcpp::QoS{10});
+    cam_sent_pub_ = create_publisher<etsi_its_cam_ts_msgs::msg::CAM>("/v2x/cam_ts/sent", rclcpp::QoS{10});
 
     // Declare Parameters
     this->declare_parameter<std::string>("link_layer");
@@ -62,7 +63,6 @@ namespace v2x
     this->declare_parameter<std::string>("gps_method", "ros");
     this->declare_parameter<std::string>("gps_provider", "/sensing/gnss/gps");
     this->declare_parameter<bool>("is_sender");
-    this->declare_parameter<bool>("publish_own_cams");
     this->declare_parameter<bool>("cam_enabled");
     this->declare_parameter<bool>("cpm_enabled");
     this->declare_parameter<std::string>("security", "none");
@@ -200,8 +200,13 @@ namespace v2x
   }
 
   void V2XNode::publishReceivedCam(etsi_its_cam_ts_msgs::msg::CAM &msg) {
-    RCLCPP_INFO(get_logger(), "Publishing CAM to ROS network");
+    RCLCPP_INFO(get_logger(), "Publishing received CAM to ROS network");
     cam_rec_pub_->publish(msg);
+  }
+
+  void V2XNode::publishSentCam(etsi_its_cam_ts_msgs::msg::CAM &msg) {
+    RCLCPP_INFO(get_logger(), "Publishing sent CAM to ROS network");
+    cam_sent_pub_->publish(msg);
   }
 
   void V2XNode::gpsFixCallback(const gps_msgs::msg::GPSFix::ConstSharedPtr msg) {
@@ -282,7 +287,7 @@ namespace v2x
   }
 
   void V2XNode::runGpsClient(const std::string host, const std::string port) {
-    struct gps_data_t gps_data;
+    gps_data_t gps_data;
 
     if (0 != gps_open(host.c_str(), port.c_str(), &gps_data)) {
       throw std::runtime_error("Failed to open gpsd on " + host + ":" + port);

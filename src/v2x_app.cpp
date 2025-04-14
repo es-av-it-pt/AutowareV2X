@@ -219,7 +219,7 @@ namespace v2x
       RCLCPP_INFO(node_->get_logger(), "MAC Address: '%s'", sout.str().c_str());
 
       link_layer = create_link_layer(io_service, link_layer_name, device);
-      RCLCPP_INFO(node_->get_logger(), "Ethernet Device: %s", target_device.c_str());
+      RCLCPP_INFO(node_->get_logger(), "IP Interface: %s", target_device.c_str());
     } else {
       if (link_layer_name == "cube-evk") {
         link_layer = create_link_layer(io_service, link_layer_name, target_device);
@@ -276,9 +276,7 @@ namespace v2x
     node_->get_parameter("cpm_enabled", cpm_enabled);
 
     if (cam_enabled) {
-      bool publish_own_cams;
-      node_->get_parameter("publish_own_cams", publish_own_cams);
-      cam = new CamApplication(node_, trigger.runtime(), stationId, is_sender, publish_own_cams);
+      cam = new CamApplication(node_, trigger.runtime(), stationId, is_sender);
       context.enable(cam);
       cam_started_ = true;
     }
