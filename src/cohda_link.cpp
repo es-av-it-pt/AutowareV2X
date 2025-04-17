@@ -1,19 +1,24 @@
-#include <memory>
-#include <boost/optional.hpp>
 #include "autoware_v2x/cohda_link.hpp"
-#include <boost/optional/optional.hpp>
+
 #include <vanetza/access/access_category.hpp>
 #include <vanetza/access/data_request.hpp>
 #include <vanetza/access/g5_link_layer.hpp>
 #include <vanetza/common/byte_buffer.hpp>
-#include <vanetza/common/serialization_buffer.hpp>
 #include <vanetza/common/clock.hpp>
+#include <vanetza/common/serialization_buffer.hpp>
 #include <vanetza/dcc/mapping.hpp>
 #include <vanetza/net/chunk_packet.hpp>
 #include <vanetza/net/cohesive_packet.hpp>
 #include <vanetza/net/ethernet_header.hpp>
-#include <cassert>
+
+#include <boost/optional.hpp>
+#include <boost/optional/optional.hpp>
+
 #include <llc-api.h>
+
+#include <cassert>
+#include <iostream>
+#include <memory>
 
 using namespace vanetza;
 
@@ -69,9 +74,9 @@ boost::optional<vanetza::EthernetHeader> CohdaLink::parse_ethernet_header(vanetz
   packet.set_boundary(OsiLayer::Link, access::G5LinkLayer::length_bytes);
   access::G5LinkLayer link_layer;
   deserialize_from_range(link_layer, packet[OsiLayer::Link]);
-  if (!access::check_fixed_fields(link_layer)) {
-      return boost::none;
-  }
+  // if (!access::check_fixed_fields(link_layer)) {
+  //     return boost::none;
+  // }
 
   EthernetHeader eth;
   eth.destination = link_layer.mac_header.destination;

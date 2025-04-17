@@ -5,7 +5,6 @@
     gps_method: "ros" # "ros" | "gpsd"
     gps_provider: "/sensing/gnss/gps" # ros topic or gpsd server (ip:port)
     is_sender: true
-    publish_own_cams: false
     cam_enabled: true
     cpm_enabled: false
     security: "none"
