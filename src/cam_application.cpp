@@ -393,7 +393,7 @@ namespace v2x
     payload->layer(OsiLayer::Application) = std::move(message);
 
     Application::DataRequest request;
-    request.its_aid = aid::CP;
+    request.its_aid = aid::CA;
     request.transport_type = geonet::TransportType::SHB;
     request.communication_profile = geonet::CommunicationProfile::ITS_G5;
 
