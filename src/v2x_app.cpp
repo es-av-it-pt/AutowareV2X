@@ -44,15 +44,14 @@ namespace v2x
 
   void V2XApp::objectsCallback(const autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr msg) {
     // RCLCPP_INFO(node_->get_logger(), "V2XApp: msg received");
-    if (!tf_received_) {
-      RCLCPP_WARN(node_->get_logger(), "[V2XApp::objectsCallback] tf not received yet");
-    }
     if (tf_received_ && cpm_started_) {
       cpm->updateObjectsList(msg);
     }
   }
 
   void V2XApp::velocityReportCallback(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr msg) {
+    if (cpm_started_)
+      cpm->updateVelocityReport(msg);
     if (cam_started_)
       cam->updateVelocityReport(msg);
   }
@@ -69,7 +68,6 @@ namespace v2x
 
 
   void V2XApp::tfCallback(const tf2_msgs::msg::TFMessage::ConstSharedPtr msg) {
-
     tf_received_ = true;
 
     double x = msg->transforms[0].transform.translation.x;
@@ -158,8 +156,10 @@ namespace v2x
     if (cpm && cpm_started_) {
       cpm->updateMGRS(&x, &y);
       cpm->updateRP(&lat, &lon, &z);
+      cpm->updateConfidencePositionEllipse(&positionConfidenceEllipse_.majorAxisLength, &positionConfidenceEllipse_.minorAxisLength, &positionConfidenceEllipse_.majorAxisConfidence);
       cpm->updateHeading(&yaw);
-      cpm->updateGenerationTime(&gdt, &timestamp_msec);
+      int gdt_timestamp = timestamp_msec;
+      cpm->updateGenerationTime(&gdt, &gdt_timestamp);
     }
 
     if (cam && cam_started_) {
@@ -176,7 +176,7 @@ namespace v2x
     // Generate ID for this station
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<unsigned long> dis(0, 4294967295);
+    std::uniform_int_distribution<unsigned long> dis(100000000, 999999999);
     unsigned long stationId = dis(gen);
 
     boost::asio::io_service io_service;
@@ -282,7 +282,7 @@ namespace v2x
     }
 
     if (cpm_enabled) {
-      cpm = new CpmApplication(node_, trigger.runtime(), is_sender);
+      cpm = new CpmApplication(node_, trigger.runtime(), stationId, is_sender);
       context.enable(cpm);
       cpm_started_ = true;
     }

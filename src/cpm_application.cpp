@@ -32,7 +32,7 @@ using namespace vanetza;
 using namespace std::chrono;
 
 namespace v2x {
-  CpmApplication::CpmApplication(V2XNode *node, Runtime &rt, bool is_sender) :
+  CpmApplication::CpmApplication(V2XNode *node, Runtime &rt, unsigned long stationId, bool is_sender) :
     node_(node),
     runtime_(rt),
     ego_(),
@@ -43,12 +43,11 @@ namespace v2x {
     reflect_packet_(false),
     objectConfidenceThreshold_(0.0),
     include_all_persons_and_animals_(false),
-    cpm_num_(0),
-    received_cpm_num_(0),
     cpm_object_id_(0),
     use_dynamic_generation_rules_(false)
   {
-    RCLCPP_INFO(node_->get_logger(), "CpmApplication started. is_sender: %d", is_sender_);
+    RCLCPP_INFO(node_->get_logger(), "CpmApplication started. is_sender: %s", is_sender_ ? "yes" : "no");
+    stationId_ = stationId;
     set_interval(milliseconds(100));
     createTables();
   }
@@ -86,8 +85,6 @@ namespace v2x {
     std::shared_ptr<const asn1::Cpm> cpm = boost::apply_visitor(visitor, *packet);
 
     if (cpm) {
-      RCLCPP_INFO(node_->get_logger(), "[INDICATE] Received CPM #%d", received_cpm_num_);
-
       rclcpp::Time current_time = node_->now();
       // RCLCPP_INFO(node_->get_logger(), "[CpmApplication::indicate] [measure] T_receive_r1 %ld", current_time.nanoseconds());
 
@@ -199,9 +196,6 @@ namespace v2x {
           throw std::runtime_error("[CpmApplication::indicate] Packet reflection failed");
         }
       }
-
-      ++received_cpm_num_;
-
     } else {
       RCLCPP_INFO(node_->get_logger(), "[INDICATE] Received broken content");
     }
@@ -219,13 +213,37 @@ namespace v2x {
     ego_.altitude = *altitude;
   }
 
-  void CpmApplication::updateGenerationTime(int *gdt, long *gdt_timestamp) {
+  void CpmApplication::updateConfidencePositionEllipse(const double *majorAxis, const double *minorAxis, const double *orientation) {
+    positionConfidenceEllipse_.majorAxisLength = *majorAxis;
+    positionConfidenceEllipse_.minorAxisLength = *minorAxis;
+    positionConfidenceEllipse_.majorAxisOrientation = *orientation;
+  }
+
+  void CpmApplication::updateGenerationTime(int *gdt, int *gdt_timestamp) {
     generationTime_ = *gdt;
     gdt_timestamp_ = *gdt_timestamp; // ETSI-epoch milliseconds timestamp
   }
 
   void CpmApplication::updateHeading(double *yaw) {
     ego_.heading = *yaw;
+  }
+
+  void CpmApplication::updateVelocityReport(const autoware_auto_vehicle_msgs::msg::VelocityReport::ConstSharedPtr msg) {
+    rclcpp::Time msg_stamp(msg->header.stamp.sec, msg->header.stamp.nanosec);
+    double dt = msg_stamp.seconds() - velocityReport_.stamp.seconds();
+    if (dt == 0) {
+      RCLCPP_WARN(node_->get_logger(), "[CamApplication::updateVelocityReport] deltaTime is 0");
+      return;
+    }
+    float longitudinal_acceleration = (msg->longitudinal_velocity - velocityReport_.longitudinal_velocity) / dt;
+    float speed = std::sqrt(std::pow(msg->longitudinal_velocity, 2) + std::pow(msg->lateral_velocity, 2));
+
+    velocityReport_.stamp = msg->header.stamp;
+    velocityReport_.heading_rate = msg->heading_rate;
+    velocityReport_.lateral_velocity = msg->lateral_velocity;
+    velocityReport_.longitudinal_velocity = msg->longitudinal_velocity;
+    velocityReport_.speed = speed;
+    velocityReport_.longitudinal_acceleration = longitudinal_acceleration;
   }
 
   void CpmApplication::setAllObjectsOfPersonsAnimalsToSend(const autoware_auto_perception_msgs::msg::PredictedObjects::ConstSharedPtr msg) {
@@ -440,173 +458,148 @@ namespace v2x {
   }
 
   void CpmApplication::send() {
-    if (is_sender_) {
+    if (!node_->positioningReceived()) return;
+    if (!is_sender_) return;
 
-      sending_ = true;
+    sending_ = true;
 
-      printObjectsList(cpm_num_);
+    // RCLCPP_INFO(node_->get_logger(), "[CpmApplication::send] Sending CPM...");
 
-      // RCLCPP_INFO(node_->get_logger(), "[CpmApplication::send] Sending CPM...");
+    vanetza::asn1::r2::Cpm message;
 
-      std::chrono::milliseconds now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+    // ITS PDU Header
+    Vanetza_ITS2_ItsPduHeader_t &header = message->header;
+    header.protocolVersion = 2;
+    header.messageId = 14;
+    header.stationId = stationId_;
 
-      vanetza::asn1::Cpm message;
+    Vanetza_ITS2_CpmPayload_t &cpm = message->payload;
 
-      // ITS PDU Header
-      ItsPduHeader_t &header = message->header;
-      header.protocolVersion = 1;
-      header.messageID = 14;
-      header.stationID = cpm_num_;
+    // ManagementContainer
+    Vanetza_ITS2_CPM_PDU_Descriptions_ManagementContainer_t &management = cpm.managementContainer;
+    asn_long2INTEGER(&management.referenceTime, (long) gdt_timestamp_);
 
-      CollectivePerceptionMessage_t &cpm = message->cpm;
+    double latitude, longitude, altitude;
+    node_->getGpsData(latitude, longitude, altitude);
+    latitude *= 1e7;
+    longitude *= 1e7;
+    altitude *= 100;
 
-      // Set GenerationTime
-      RCLCPP_INFO(node_->get_logger(), "[CpmApplication::send] %ld", gdt_timestamp_);
-      cpm.generationDeltaTime = (now_ms.count() - 1072915200000) % 65536;
+    if (-900000000 <= latitude && latitude <= 900000000) management.referencePosition.latitude = latitude;
+    else management.referencePosition.latitude = Vanetza_ITS2_Latitude_unavailable;
+    if (-1800000000 <= longitude && longitude <= 1800000000) management.referencePosition.longitude = longitude;
+    else management.referencePosition.longitude = Vanetza_ITS2_Longitude_unavailable;
+    if (-100000 <= altitude && altitude <= 800000) management.referencePosition.altitude.altitudeValue = altitude;
+    else management.referencePosition.altitude.altitudeValue = Vanetza_ITS2_AltitudeValue_unavailable;
+    management.referencePosition.altitude.altitudeConfidence = Vanetza_ITS2_AltitudeConfidence_unavailable;
 
-      CpmManagementContainer_t &management = cpm.cpmParameters.managementContainer;
-      management.stationType = StationType_passengerCar;
-      management.referencePosition.latitude = ego_.latitude * 1e7;
-      management.referencePosition.longitude = ego_.longitude * 1e7;
+    if (0 <= positionConfidenceEllipse_.majorAxisLength && positionConfidenceEllipse_.majorAxisLength <= 4094) management.referencePosition.positionConfidenceEllipse.semiMajorConfidence = positionConfidenceEllipse_.majorAxisLength;
+    else management.referencePosition.positionConfidenceEllipse.semiMajorConfidence = Vanetza_ITS2_SemiAxisLength_unavailable;
+    if (0 <= positionConfidenceEllipse_.minorAxisLength && positionConfidenceEllipse_.minorAxisLength <= 4094) management.referencePosition.positionConfidenceEllipse.semiMinorConfidence = positionConfidenceEllipse_.minorAxisLength;
+    else management.referencePosition.positionConfidenceEllipse.semiMinorConfidence = Vanetza_ITS2_SemiAxisLength_unavailable;
+    if (0 <= positionConfidenceEllipse_.majorAxisOrientation && positionConfidenceEllipse_.majorAxisOrientation <= 3600) management.referencePosition.positionConfidenceEllipse.semiMajorOrientation = positionConfidenceEllipse_.majorAxisOrientation;
+    else management.referencePosition.positionConfidenceEllipse.semiMajorOrientation = Vanetza_ITS2_Wgs84AngleValue_unavailable;
 
-      StationDataContainer_t *&sdc = cpm.cpmParameters.stationDataContainer;
-      sdc = vanetza::asn1::allocate<StationDataContainer_t>();
-      sdc->present = StationDataContainer_PR_originatingVehicleContainer;
+    Vanetza_ITS2_WrappedCpmContainers_t &cpmContainers = cpm.cpmContainers;
 
-      OriginatingVehicleContainer_t &ovc = sdc->choice.originatingVehicleContainer;
-      ovc.speed.speedValue = 0;
-      ovc.speed.speedConfidence = 1;
+    // OriginatingVehicleContainer
+    auto *originatingVehicleContainer = vanetza::asn1::allocate<Vanetza_ITS2_WrappedCpmContainer>();
+    originatingVehicleContainer->containerId = 1;
+    originatingVehicleContainer->containerData.present = Vanetza_ITS2_WrappedCpmContainer__containerData_PR_OriginatingVehicleContainer;
+    ASN_SEQUENCE_ADD(&cpmContainers, originatingVehicleContainer);
 
-      // Calculate headingValue of ego-vehicle.
-      // Convert ego-vehicle yaw to True-North clockwise angle (heading). 0.1 degree accuracy.
-      int heading = std::lround(((-ego_.heading * 180.0 / M_PI) + 90.0) * 10.0);
-      if (heading < 0) heading += 3600;
-      ovc.heading.headingValue = heading;
-      ovc.heading.headingConfidence = 1;
+    Vanetza_ITS2_OriginatingVehicleContainer_t &originatingVehicleContainerData = originatingVehicleContainer->containerData.choice.OriginatingVehicleContainer;
 
-      int perceivedObjectsCount = 0;
+    int orientationAngle = std::lround((90.0 - (atan2(velocityReport_.lateral_velocity, velocityReport_.longitudinal_velocity) * (180.0 / M_PI))) * 10.0);
+    if (orientationAngle < 0) orientationAngle += 3600;
+    if (0 <= orientationAngle && orientationAngle <= 3600) originatingVehicleContainerData.orientationAngle.value = orientationAngle;
+    else originatingVehicleContainerData.orientationAngle.value = Vanetza_ITS2_Wgs84AngleValue_unavailable;
+    originatingVehicleContainerData.orientationAngle.confidence = Vanetza_ITS2_Wgs84AngleConfidence_unavailable;
 
-      if (objectsList.size() > 0) {
-        PerceivedObjectContainer_t *&poc = cpm.cpmParameters.perceivedObjectContainer;
-        poc = vanetza::asn1::allocate<PerceivedObjectContainer_t>();
+//      // TODO: SensorInformationContainer
+//      auto *sensorInformationContainer = vanetza::asn1::allocate<Vanetza_ITS2_WrappedCpmContainer>();
+//      sensorInformationContainer->containerId = 3;
+//      sensorInformationContainer->containerData.present = Vanetza_ITS2_WrappedCpmContainer__containerData_PR_SensorInformationContainer;
+//      ASN_SEQUENCE_ADD(&cpmContainers, sensorInformationContainer);
 
-        for (auto& object : objectsList) {
+//      // TODO: PerceptionRegionContainer
+//      auto *perceptionRegionContainer = vanetza::asn1::allocate<Vanetza_ITS2_WrappedCpmContainer>();
+//      perceptionRegionContainer->containerId = 4;
+//      perceptionRegionContainer->containerData.present = Vanetza_ITS2_WrappedCpmContainer__containerData_PR_PerceptionRegionContainer;
+//      ASN_SEQUENCE_ADD(&cpmContainers, perceptionRegionContainer);
 
-          // RCLCPP_INFO(node_->get_logger(), "object.to_send: %d", object.to_send);
+    // PerceivedObjectContainer
+    auto *perceivedObjectContainer = vanetza::asn1::allocate<Vanetza_ITS2_WrappedCpmContainer>();
+    perceivedObjectContainer->containerId = 5;
+    perceivedObjectContainer->containerData.present = Vanetza_ITS2_WrappedCpmContainer__containerData_PR_PerceivedObjectContainer;
+    ASN_SEQUENCE_ADD(&cpmContainers, perceivedObjectContainer);
 
-          if (object.to_send) {
+    Vanetza_ITS2_PerceivedObjectContainer_t &perceivedObjectContainerData = perceivedObjectContainer->containerData.choice.PerceivedObjectContainer;
+    Vanetza_ITS2_CardinalNumber1B_t *numberOfPerceivedObjects = &perceivedObjectContainerData.numberOfPerceivedObjects;
+    *numberOfPerceivedObjects = 0;
 
-            PerceivedObject *pObj = vanetza::asn1::allocate<PerceivedObject>();
+    if (!objectsList.empty()) {
+      Vanetza_ITS2_PerceivedObjects_t &objects = perceivedObjectContainerData.perceivedObjects;
 
-            // Update CPM-specific values for Object
-            object.xDistance = std::lround((
-              (object.position_x - ego_.mgrs_x) * cos(-ego_.heading) - (object.position_y - ego_.mgrs_y) * sin(-ego_.heading)
-              ) * 100.0);
-            object.yDistance = std::lround((
-              (object.position_x - ego_.mgrs_x) * sin(-ego_.heading) + (object.position_y - ego_.mgrs_y) * cos(-ego_.heading)
-              ) * 100.0);
-            if (object.xDistance < -132768 || object.xDistance > 132767) {
-              RCLCPP_WARN(node_->get_logger(), "xDistance out of bounds. objectID: #%d", object.objectID);
-              continue;
-            }
-            if (object.yDistance < -132768 || object.yDistance > 132767) {
-              RCLCPP_WARN(node_->get_logger(), "yDistance out of bounds. objectID: #%d", object.objectID);
-              continue;
-            }
+      for (auto& object : objectsList) {
+        if (!object.to_send) continue;
 
-            // Calculate orientation of detected object
-            tf2::Quaternion quat(object.orientation_x, object.orientation_y, object.orientation_z, object.orientation_w);
-            tf2::Matrix3x3 matrix(quat);
-            double roll, pitch, yaw;
-            matrix.getRPY(roll, pitch, yaw);
-            if (yaw < 0) {
-              object.yawAngle = std::lround(((yaw + 2*M_PI) * 180.0 / M_PI) * 10.0); // 0 - 3600
-            } else {
-              object.yawAngle = std::lround((yaw * 180.0 / M_PI) * 10.0); // 0 - 3600
-            }
-            object.xSpeed = 0;
-            object.ySpeed = 0;
-            pObj->objectID = object.objectID;
-            pObj->timeOfMeasurement = object.timeOfMeasurement;
-            pObj->xDistance.value = object.xDistance;
-            pObj->xDistance.confidence = 1;
-            pObj->yDistance.value = object.yDistance;
-            pObj->yDistance.confidence = 1;
-            pObj->xSpeed.value = object.xSpeed;
-            pObj->xSpeed.confidence = 1;
-            pObj->ySpeed.value = object.ySpeed;
-            pObj->ySpeed.confidence = 1;
+        auto *pObj = vanetza::asn1::allocate<Vanetza_ITS2_PerceivedObject>();
 
-            pObj->planarObjectDimension1 = vanetza::asn1::allocate<ObjectDimension_t>();
-            pObj->planarObjectDimension2 = vanetza::asn1::allocate<ObjectDimension_t>();
-            pObj->verticalObjectDimension = vanetza::asn1::allocate<ObjectDimension_t>();
+        pObj->objectId = vanetza::asn1::allocate<Vanetza_ITS2_Identifier2B_t>();
+        *pObj->objectId = object.objectID;
+        pObj->measurementDeltaTime = object.timeOfMeasurement;
 
-            (*(pObj->planarObjectDimension1)).value = object.shape_y;
-            (*(pObj->planarObjectDimension1)).confidence = 1;
-            (*(pObj->planarObjectDimension2)).value = object.shape_x;
-            (*(pObj->planarObjectDimension2)).confidence = 1;
-            (*(pObj->verticalObjectDimension)).value = object.shape_z;
-            (*(pObj->verticalObjectDimension)).confidence = 1;
+        pObj->position.xCoordinate.value = object.position_x;
+        pObj->position.xCoordinate.confidence = Vanetza_ITS2_CoordinateConfidence_unavailable;
+        pObj->position.yCoordinate.value = object.position_y;
+        pObj->position.yCoordinate.confidence = Vanetza_ITS2_CoordinateConfidence_unavailable;
 
-            pObj->yawAngle = vanetza::asn1::allocate<CartesianAngle>();
-            (*(pObj->yawAngle)).value = object.yawAngle;
-            (*(pObj->yawAngle)).confidence = 1;
+        pObj->objectDimensionX = vanetza::asn1::allocate<Vanetza_ITS2_ObjectDimension_t>();
+        pObj->objectDimensionY = vanetza::asn1::allocate<Vanetza_ITS2_ObjectDimension_t>();
+        pObj->objectDimensionZ = vanetza::asn1::allocate<Vanetza_ITS2_ObjectDimension_t>();
 
-            ASN_SEQUENCE_ADD(poc, pObj);
+        (*(pObj->objectDimensionX)).value = object.shape_x;
+        (*(pObj->objectDimensionX)).confidence = Vanetza_ITS2_ObjectDimensionConfidence_unavailable;
+        (*(pObj->objectDimensionY)).value = object.shape_y;
+        (*(pObj->objectDimensionY)).confidence = Vanetza_ITS2_ObjectDimensionConfidence_unavailable;
+        (*(pObj->objectDimensionZ)).value = object.shape_z;
+        (*(pObj->objectDimensionZ)).confidence = Vanetza_ITS2_ObjectDimensionConfidence_unavailable;
 
-            // object.to_send = false;
-            // object.to_send_trigger = -1;
-            // RCLCPP_INFO(node_->get_logger(), "Sending object: %s", object.uuid.c_str());
+        ASN_SEQUENCE_ADD(&objects, pObj);
 
-            ++perceivedObjectsCount;
+        // object.to_send = false;
+        // object.to_send_trigger = -1;
+         RCLCPP_INFO(node_->get_logger(), "Sending object: %s", object.uuid.c_str());
 
-          } else {
-            // Object.to_send is set to False
-            // RCLCPP_INFO(node_->get_logger(), "Object: %s not being sent.", object.uuid.c_str());
-          }
-        }
-
-        cpm.cpmParameters.numberOfPerceivedObjects = perceivedObjectsCount;
-
-        if (perceivedObjectsCount == 0) {
-          cpm.cpmParameters.perceivedObjectContainer = NULL;
-        }
-
-      } else {
-        cpm.cpmParameters.perceivedObjectContainer = NULL;
-        RCLCPP_INFO(node_->get_logger(), "[CpmApplication::send] Empty POC");
+        ++*numberOfPerceivedObjects;
       }
-
-      RCLCPP_INFO(node_->get_logger(), "[CpmApplication::send] Sending CPM with %d objects", perceivedObjectsCount);
-
-      insertCpmToCpmTable(message, (char*) "cpm_sent");
-
-      std::unique_ptr<geonet::DownPacket> payload{new geonet::DownPacket()};
-
-      payload->layer(OsiLayer::Application) = std::move(message);
-
-      Application::DataRequest request;
-      request.its_aid = aid::CP;
-      request.transport_type = geonet::TransportType::SHB;
-      request.communication_profile = geonet::CommunicationProfile::ITS_G5;
-
-      Application::DataConfirm confirm = Application::request(request, std::move(payload), node_);
-
-      if (!confirm.accepted()) {
-        throw std::runtime_error("[CpmApplication::send] CPM application data request failed");
-      }
-
-      sending_ = false;
-      // rclcpp::Time current_time = node_->now();
-      // RCLCPP_INFO(node_->get_logger(), "[CpmApplication::send] [measure] T_depart_r1 %ld", current_time.nanoseconds());
-
-      std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds> (
-        std::chrono::system_clock::now().time_since_epoch()
-      );
-      node_->latency_log_file << "T_depart," << cpm_num_ << "," << ms.count() << std::endl;
-
-      ++cpm_num_;
+    } else {
+      RCLCPP_INFO(node_->get_logger(), "No objects to send.");
     }
+
+    RCLCPP_INFO(node_->get_logger(), "[CpmApplication::send] Sending CPM from station #%ld with %ld objects", stationId_, *numberOfPerceivedObjects);
+
+    // insertCpmToCpmTable(message, (char*) "cpm_sent");
+
+    std::unique_ptr<geonet::DownPacket> payload{new geonet::DownPacket()};
+
+    payload->layer(OsiLayer::Application) = std::move(message);
+
+    Application::DataRequest request;
+    request.its_aid = aid::CP;
+    request.transport_type = geonet::TransportType::SHB;
+    request.communication_profile = geonet::CommunicationProfile::ITS_G5;
+
+    Application::DataConfirm confirm = Application::request(request, std::move(payload), node_);
+
+    if (!confirm.accepted()) {
+      throw std::runtime_error("[CpmApplication::send] CPM application data request failed");
+    }
+
+    RCLCPP_INFO(node_->get_logger(), "[CpmApplication::send] Successfully sent");
+
+    sending_ = false;
   }
 
   void CpmApplication::createTables() {

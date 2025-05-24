@@ -84,7 +84,7 @@ namespace v2x
       boost::thread gps(boost::bind(&V2XNode::runGpsClient, this, gpsd_host, gpsd_port));
       RCLCPP_INFO(get_logger(), "GPS Client Launched on %s:%s", gpsd_host.c_str(), gpsd_port.c_str());
     } else {
-      if (const std::regex ros_topic_regex("^(\\/|[a-zA-Z])[\\w\\/]*[^\\/]$"); !std::regex_match(gps_provider, ros_topic_regex)) {
+      if (const std::regex ros_topic_regex(R"(^(\/|[a-zA-Z])[\w\/]*[^\/]$)"); !std::regex_match(gps_provider, ros_topic_regex)) {
         throw std::runtime_error("Invalid gps_provider value for ros topic method");
       }
       gps_sub_ = this->create_subscription<gps_msgs::msg::GPSFix>(gps_provider, 10, std::bind(&V2XNode::gpsFixCallback, this, _1));
