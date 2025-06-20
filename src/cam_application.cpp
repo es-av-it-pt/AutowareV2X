@@ -136,63 +136,73 @@ namespace v2x
 
   void CamApplication::indicate(const Application::DataIndication &indication, Application::UpPacketPtr packet)
   {
-    asn1::PacketVisitor<asn1::r2::Cam> visitor;
-    std::shared_ptr<const asn1::r2::Cam> rec_cam_ptr = boost::apply_visitor(visitor, *packet);
+    try {
+      asn1::PacketVisitor<asn1::r2::Cam> visitor;
+      std::shared_ptr<const asn1::r2::Cam> rec_cam_ptr = boost::apply_visitor(visitor, *packet);
 
-    if (!rec_cam_ptr) {
-      RCLCPP_INFO(node_->get_logger(), "[CamApplication::indicate] Received invalid CAM");
-      return;
-    }
+      if (!rec_cam_ptr) {
+        RCLCPP_INFO(node_->get_logger(), "[CamApplication::indicate] Received invalid CAM");
+        return;
+      }
 
-    asn1::r2::Cam rec_cam = *rec_cam_ptr;
-    auto now = std::chrono::system_clock::now();
-    std::chrono::milliseconds now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
-    RCLCPP_INFO(node_->get_logger(), "[CamApplication::indicate] Received CAM from station with ID #%ld at %ld epoch time", rec_cam->header.stationId, now_ms.count());
-    vanetza::facilities::print_indented(std::cout, rec_cam, "  ", 0);
+      asn1::r2::Cam rec_cam = *rec_cam_ptr;
+      auto now = std::chrono::system_clock::now();
+      std::chrono::milliseconds now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
+      RCLCPP_INFO(node_->get_logger(), "[CamApplication::indicate] Received CAM from station with ID #%ld at %ld epoch time", rec_cam->header.stationId, now_ms.count());
+      vanetza::facilities::print_indented(std::cout, rec_cam, "  ", 0);
 
-    namespace cam_ts_msgs = etsi_its_cam_ts_msgs::msg;
-    namespace access = etsi_its_cam_ts_msgs::access;
-    cam_ts_msgs::CAM ros_cam;
+      namespace cam_ts_msgs = etsi_its_cam_ts_msgs::msg;
+      namespace access = etsi_its_cam_ts_msgs::access;
+      cam_ts_msgs::CAM ros_cam;
 
-    Vanetza_ITS2_ItsPduHeader_t &header = rec_cam->header;
-    Vanetza_ITS2_CamPayload_t &cam = rec_cam->cam;
-    Vanetza_ITS2_BasicContainer_t &basic_container = cam.camParameters.basicContainer;
-    Vanetza_ITS2_BasicVehicleContainerHighFrequency_t &bvc = cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency;
+      Vanetza_ITS2_ItsPduHeader_t &header = rec_cam->header;
+      access::setItsPduHeader(ros_cam, header.stationId, header.protocolVersion);
 
-    cam_ts_msgs::GenerationDeltaTime gdt;
-    gdt.value = cam.generationDeltaTime;
+      Vanetza_ITS2_CamPayload_t &cam = rec_cam->cam;
 
-    access::setItsPduHeader(ros_cam, header.stationId, header.protocolVersion);
-    access::setGenerationDeltaTime(ros_cam, access::getUnixNanosecondsFromGenerationDeltaTime(gdt, std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count()));
-    access::setStationType(ros_cam, basic_container.stationType);
-    access::setReferencePosition(ros_cam,
-                                 basic_container.referencePosition.latitude / 1e7,
-                                 basic_container.referencePosition.longitude / 1e7,
-                                 basic_container.referencePosition.altitude.altitudeValue / 1e2,
-                                 basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisLength / 1e1,
-                                 basic_container.referencePosition.positionConfidenceEllipse.semiMinorAxisLength / 1e1,
-                                 basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisOrientation / 1e2);
-    access::setHeading(ros_cam, bvc.heading.headingValue / 10);
-    access::setSpeed(ros_cam, bvc.speed.speedValue / 100);
-    access::setVehicleDimensions(ros_cam, bvc.vehicleLength.vehicleLengthValue / 10, bvc.vehicleWidth / 10);
-    access::setLongitudinalAcceleration(ros_cam, bvc.longitudinalAcceleration.value / 10);
-    access::setDriveDirection(ros_cam, bvc.driveDirection);
-    access::setCurvatureValue(ros_cam, bvc.curvature.curvatureValue / 10, bvc.curvatureCalculationMode);
-    access::setYawRateValue(ros_cam, bvc.yawRate.yawRateValue / 10);
+      cam_ts_msgs::GenerationDeltaTime gdt;
+      gdt.value = cam.generationDeltaTime;
+      access::setGenerationDeltaTime(ros_cam, access::getUnixNanosecondsFromGenerationDeltaTime(gdt, std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count()));
 
-    Vanetza_ITS2_SpecialVehicleContainer_t *&svc = cam.camParameters.specialVehicleContainer;
-    if (svc) {
-      cam_ts_msgs::SpecialVehicleContainer ros_svc;
+      Vanetza_ITS2_BasicContainer_t &basic_container = cam.camParameters.basicContainer;
+      access::setStationType(ros_cam, basic_container.stationType);
+      access::setReferencePosition(ros_cam,
+                                   basic_container.referencePosition.latitude / 1e7,
+                                   basic_container.referencePosition.longitude / 1e7,
+                                   basic_container.referencePosition.altitude.altitudeValue / 1e2);
+      access::setPositionConfidenceEllipse(ros_cam.cam.cam_parameters.basic_container.reference_position.position_confidence_ellipse,
+                                           basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisLength / 1e1,
+                                           basic_container.referencePosition.positionConfidenceEllipse.semiMinorAxisLength / 1e1,
+                                           basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisOrientation / 1e2);
 
-      Vanetza_ITS2_SpecialVehicleContainer_PR &present = svc->present;
-      switch (present) {
-        case Vanetza_ITS2_SpecialVehicleContainer_PR_publicTransportContainer:
+      Vanetza_ITS2_HighFrequencyContainer_PR &hf_present = cam.camParameters.highFrequencyContainer.present;
+      if (hf_present == Vanetza_ITS2_HighFrequencyContainer_PR_basicVehicleContainerHighFrequency) {
+        Vanetza_ITS2_BasicVehicleContainerHighFrequency_t &bvc = cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency;
+        access::setHeading(ros_cam, bvc.heading.headingValue / 10);
+        access::setSpeed(ros_cam, bvc.speed.speedValue / 100);
+        access::setVehicleDimensions(ros_cam, bvc.vehicleLength.vehicleLengthValue / 10, bvc.vehicleWidth / 10);
+        access::setLongitudinalAcceleration(ros_cam, bvc.longitudinalAcceleration.value / 10);
+        ros_cam.cam.cam_parameters.high_frequency_container.basic_vehicle_container_high_frequency.drive_direction.value = bvc.driveDirection;
+        ros_cam.cam.cam_parameters.high_frequency_container.basic_vehicle_container_high_frequency.curvature.curvature_value.value = bvc.curvature.curvatureValue / 10;
+        ros_cam.cam.cam_parameters.high_frequency_container.basic_vehicle_container_high_frequency.curvature_calculation_mode.value = bvc.curvatureCalculationMode;
+        ros_cam.cam.cam_parameters.high_frequency_container.basic_vehicle_container_high_frequency.yaw_rate.yaw_rate_value.value = bvc.yawRate.yawRateValue / 10;
+      } else {
+        // TODO: handle rsu containers
+      }
+
+      Vanetza_ITS2_SpecialVehicleContainer_t *&svc = cam.camParameters.specialVehicleContainer;
+      if (svc) {
+        cam_ts_msgs::SpecialVehicleContainer ros_svc;
+
+        Vanetza_ITS2_SpecialVehicleContainer_PR &present = svc->present;
+        switch (present) {
+          case Vanetza_ITS2_SpecialVehicleContainer_PR_publicTransportContainer:
           {
             Vanetza_ITS2_PublicTransportContainer_t &ptc = svc->choice.publicTransportContainer;
             ros_svc.public_transport_container.embarkation_status.value = ptc.embarkationStatus;
           }
           break;
-        case Vanetza_ITS2_SpecialVehicleContainer_PR_emergencyContainer:
+          case Vanetza_ITS2_SpecialVehicleContainer_PR_emergencyContainer:
           {
             Vanetza_ITS2_EmergencyContainer_t &ec = svc->choice.emergencyContainer;
             ros_svc.emergency_container.light_bar_siren_in_use.set__value(std::vector<uint8_t>(ec.lightBarSirenInUse.buf, ec.lightBarSirenInUse.buf + ec.lightBarSirenInUse.size));
@@ -206,14 +216,19 @@ namespace v2x
             }
           }
           break;
-        default:
-          break;
+          default:
+            break;
+        }
+
+        ros_cam.cam.cam_parameters.special_vehicle_container = ros_svc;
       }
 
-      ros_cam.cam.cam_parameters.special_vehicle_container = ros_svc;
+      node_->publishReceivedCam(ros_cam);
+    } catch (const std::exception &e) {
+      RCLCPP_ERROR(node_->get_logger(), "[CamApplication::indicate] Exception: %s", e.what());
+    } catch (...) {
+      RCLCPP_ERROR(node_->get_logger(), "[CamApplication::indicate] Unknown exception occurred");
     }
-
-    node_->publishReceivedCam(ros_cam);
   }
 
   void CamApplication::updateMGRS(double *x, double *y) {
@@ -412,17 +427,19 @@ namespace v2x
     access::setReferencePosition(ros_cam,
                                  basic_container.referencePosition.latitude / 1e7,
                                  basic_container.referencePosition.longitude / 1e7,
-                                 basic_container.referencePosition.altitude.altitudeValue / 1e2,
-                                 basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisLength / 1e1,
-                                 basic_container.referencePosition.positionConfidenceEllipse.semiMinorAxisLength / 1e1,
-                                 basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisOrientation / 1e2);
+                                 basic_container.referencePosition.altitude.altitudeValue / 1e2);
+    access::setPositionConfidenceEllipse(ros_cam.cam.cam_parameters.basic_container.reference_position.position_confidence_ellipse,
+                                         basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisLength / 1e1,
+                                         basic_container.referencePosition.positionConfidenceEllipse.semiMinorAxisLength / 1e1,
+                                         basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisOrientation / 1e2);
     access::setHeading(ros_cam, bvc.heading.headingValue / 10);
     access::setSpeed(ros_cam, bvc.speed.speedValue / 100);
     access::setVehicleDimensions(ros_cam, bvc.vehicleLength.vehicleLengthValue / 10, bvc.vehicleWidth / 10);
     access::setLongitudinalAcceleration(ros_cam, bvc.longitudinalAcceleration.value / 10);
-    access::setDriveDirection(ros_cam, bvc.driveDirection);
-    access::setCurvatureValue(ros_cam, bvc.curvature.curvatureValue / 10, bvc.curvatureCalculationMode);
-    access::setYawRateValue(ros_cam, bvc.yawRate.yawRateValue / 10);
+    ros_cam.cam.cam_parameters.high_frequency_container.basic_vehicle_container_high_frequency.drive_direction.value = bvc.driveDirection;
+    ros_cam.cam.cam_parameters.high_frequency_container.basic_vehicle_container_high_frequency.curvature.curvature_value.value = bvc.curvature.curvatureValue / 10;
+    ros_cam.cam.cam_parameters.high_frequency_container.basic_vehicle_container_high_frequency.curvature_calculation_mode.value = bvc.curvatureCalculationMode;
+    ros_cam.cam.cam_parameters.high_frequency_container.basic_vehicle_container_high_frequency.yaw_rate.yaw_rate_value.value = bvc.yawRate.yawRateValue / 10;
 
     node_->publishSentCam(ros_cam);
 

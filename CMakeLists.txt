@@ -25,6 +25,7 @@ find_package(GeographicLib 1.37 REQUIRED)
 find_package(Boost COMPONENTS thread program_options REQUIRED)
 find_package(etsi_its_cam_ts_coding REQUIRED)
 find_package(etsi_its_cam_ts_conversion REQUIRED)
+find_package(etsi_its_msgs_utils REQUIRED)
 ament_auto_find_build_dependencies()
 find_package(std_msgs REQUIRED)
 find_package(gps_msgs REQUIRED)
@@ -33,6 +34,7 @@ find_package(Protobuf REQUIRED)
 include_directories(
   include
   ${CMAKE_CURRENT_BINARY_DIR}/src
+  /opt/ros/humble/include/etsi_its_msgs_utils
   ../etsi_its_messages/etsi_its_msgs_utils/include
 )
 
