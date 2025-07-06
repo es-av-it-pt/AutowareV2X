@@ -14,7 +14,7 @@
 #include <boost/optional.hpp>
 #include <boost/optional/optional.hpp>
 
-#include <llc-api.h>
+#include <linux/cohda/llc/llc-api.h>
 
 #include <cassert>
 #include <iostream>
