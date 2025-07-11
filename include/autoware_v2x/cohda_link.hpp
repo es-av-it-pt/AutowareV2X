@@ -1,17 +1,23 @@
 #ifndef COHDA_LINK_HPP_IXOCQ5RH
 #define COHDA_LINK_HPP_IXOCQ5RH
 
-#include "raw_socket_link.hpp"
+#include "autoware_v2x/link_layer.hpp"
+#include "ublox/ublox.h"
 
-class CohdaLink : public RawSocketLink
-{
+class CohdaLink : public LinkLayer {
 public:
-    using RawSocketLink::RawSocketLink;
+  CohdaLink();
+  void request(const vanetza::access::DataRequest&, std::unique_ptr<vanetza::ChunkPacket>) override;
+  void indicate(IndicationCallback callback) override;
 
-    void request(const vanetza::access::DataRequest&, std::unique_ptr<vanetza::ChunkPacket>) override;
+private:
+  it2s_ublox_t* ublox;
+  pthread_t rx_thread;
+  void rx_callback(it2s_ublox_t *amqp, void* user_data, unsigned char* buf, int packet_len);
+  IndicationCallback indicate_to_router_;
 
 protected:
-    boost::optional<vanetza::EthernetHeader> parse_ethernet_header(vanetza::CohesivePacket&) const override;
+  boost::optional<vanetza::EthernetHeader> parse_ethernet_header(vanetza::CohesivePacket&) const override;
 };
 
 #endif /* COHDA_LINK_HPP_IXOCQ5RH */
