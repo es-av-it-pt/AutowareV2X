@@ -41,41 +41,6 @@ void CohdaLink::rx_callback(it2s_ublox_t *amqp, void* user_data, unsigned char* 
   */
 }
 
-boost::optional<vanetza::EthernetHeader> CohdaLink::parse_ethernet_header(vanetza::CohesivePacket& packet) const {
-  static const std::size_t min_length = sizeof(tMKxRxPacket) + access::G5LinkLayer::length_bytes + access::ieee802::dot11::fcs_length_bytes;
-  if (packet.size(OsiLayer::Physical) < min_length) {
-      return boost::none;
-  }
-
-  packet.set_boundary(OsiLayer::Physical, sizeof(tMKxRxPacket));
-  auto phy = reinterpret_cast<const tMKxRxPacket*>(&*packet[OsiLayer::Physical].begin());
-  if (phy->Hdr.Type != MKXIF_RXPACKET) {
-      return boost::none;
-  }
-
-  if (phy->Hdr.Len != packet.size() || phy->RxPacketData.RxFrameLength != packet.size() - sizeof(tMKxRxPacket)) {
-      return boost::none;
-  }
-
-  if (!phy->RxPacketData.FCSPass) {
-      return boost::none;
-  }
-
-  packet.trim(OsiLayer::Link, packet.size() - access::ieee802::dot11::fcs_length_bytes);
-  packet.set_boundary(OsiLayer::Link, access::G5LinkLayer::length_bytes);
-  access::G5LinkLayer link_layer;
-  deserialize_from_range(link_layer, packet[OsiLayer::Link]);
-  if (!access::check_fixed_fields(link_layer)) {
-      return boost::none;
-  }
-
-  EthernetHeader eth;
-  eth.destination = link_layer.mac_header.destination;
-  eth.source = link_layer.mac_header.source;
-  eth.type = link_layer.llc_snap_header.protocol_id;
-  return eth;
-}
-
 void CohdaLink::CohdaLink() {
   // configs
   int channel = 180;
