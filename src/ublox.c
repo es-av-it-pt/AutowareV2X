@@ -1,6 +1,5 @@
 #include <linux/cohda/llc/llc-api.h>
 #include <linux/cohda/llc/llc.h>
-
 #include "ublox/debug-levels.h"
 #include "ublox/mk2mac-api-types.h"
 #include "ublox/ublox.h"
@@ -32,12 +31,9 @@ static tMKxStatus LLC_RxInd(struct MKx* pMKx, tMKxRxPacket* pMsg, void* pPriv) {
     return result;
 }
 
-
 static void* MKxRecvFn(it2s_ublox_t *ublox) {
-
 #define RX_IF_MKX (0)
 #define RX_IF_CNT (RX_IF_MKX + 1)
-
     struct pollfd FDs[RX_IF_CNT] = {{
         -1,
     }};
@@ -65,12 +61,10 @@ static void* MKxRecvFn(it2s_ublox_t *ublox) {
         }
     }
 
-
     return NULL;
 }
 
 it2s_ublox_t *it2s_ublox_init(int channel, char radio, int channel_config, int antenna, char* mcs, int power) {
-
     char cmd[256];
     sprintf(cmd, "/opt/cohda/bin/llc chconfig -s -w CCH -c %d -r%c -a3 -bMK2BW_10MHz -p%d -e0x8947 -m%s -iwave-raw > /dev/null", channel, radio, power, mcs);
     system(cmd);
@@ -88,8 +82,7 @@ it2s_ublox_t *it2s_ublox_init(int channel, char radio, int channel_config, int a
     ublox->config.channel_config = channel_config;
     ublox->config.tx_antenna = antenna;
 
-    ;
-    if (!strcmp(mcs, "MK2MCS_R12BPSK")) { // TODO
+    if (!strcmp(mcs, "MK2MCS_R12BPSK")) {
         ublox->config.mcs = MK2MCS_R12BPSK;
     } else {
         ublox->config.mcs = 0; 
@@ -101,21 +94,20 @@ it2s_ublox_t *it2s_ublox_init(int channel, char radio, int channel_config, int a
     ublox->pMKx->API.Callbacks.RxInd = LLC_RxInd;
     ublox->pMKx->API.Callbacks.RxAlloc = LLC_RxAlloc;
     ublox->pMKx->pPriv = (void*)ublox;
-
     ublox->Exit = 0;
 
     return ublox;
 }
 
-int it2s_ublox_loop(it2s_ublox_t *ublox) {
-
+void* it2s_ublox_loop(void *arg) {
+    it2s_ublox_t* ublox = (it2s_ublox_t*) arg;
     MKxRecvFn(ublox);
 
     while (ublox->Exit == false) {
         sleep(1);
     }
 
-    return 0;
+    return NULL;
 }
 
 void it2s_ublox_stop(it2s_ublox_t *ublox) {
@@ -154,13 +146,11 @@ int it2s_ublox_tx_packet(it2s_ublox_t *ublox, it2s_ublox_config_t* config, uint8
     memcpy(pMsg->TxPacketData.TxFrame, packet, packet_len);
     pMsg->TxPacketData.TxFrameLength = packet_len;
 
-    // Transmit packet
     int Res = ublox->pMKx->API.Functions.TxReq(ublox->pMKx, pMsg, ublox);
     if (Res) {
         printf("[ublox] error transmitting packet");
     }
 
     free(pMsg);
-
     return 0;
 }
