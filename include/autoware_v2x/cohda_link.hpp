@@ -15,9 +15,6 @@ private:
   pthread_t rx_thread;
   void rx_callback(it2s_ublox_t *amqp, void* user_data, unsigned char* buf, int packet_len);
   IndicationCallback indicate_to_router_;
-
-protected:
-  boost::optional<vanetza::EthernetHeader> parse_ethernet_header(vanetza::CohesivePacket&) const override;
 };
 
 #endif /* COHDA_LINK_HPP_IXOCQ5RH */
