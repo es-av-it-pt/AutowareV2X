@@ -55,9 +55,6 @@ set(SOURCES
 )
 
 if(DEFINED BUILD_COHDA)
-  include_directories(
-    /v2x/cohda-headers
-  )
   list(APPEND SOURCES src/cohda_link.cpp src/ublox.c)
   add_compile_definitions(BUILD_COHDA)
 endif()
@@ -78,11 +75,11 @@ target_link_libraries(autoware_v2x
   gps
 )
 
-#if(DEFINED BUILD_COHDA)
-#  target_link_libraries(autoware_v2x
-#    LLC
-#  )
-#endif()
+if(DEFINED BUILD_COHDA)
+  target_link_libraries(autoware_v2x
+    LLC
+  )
+endif()
 
 rclcpp_components_register_node(autoware_v2x
   PLUGIN "v2x::V2XNode"
