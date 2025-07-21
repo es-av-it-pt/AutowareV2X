@@ -22,7 +22,7 @@ std::unique_ptr<LinkLayer> create_link_layer(boost::asio::io_service &io_service
   }
 #ifdef BUILD_COHDA
   else if (name == "cohda") {
-    link_layer.reset(new CohdaLink{std::move(raw_socket)});
+    link_layer.reset(new CohdaLink{});
   }
 #endif
   else {
