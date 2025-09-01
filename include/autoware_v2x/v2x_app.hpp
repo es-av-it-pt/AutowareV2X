@@ -40,6 +40,7 @@ namespace v2x
     friend class CpmApplication;
     friend class CamApplication;
     friend class Application;
+    std::unique_ptr<LinkLayer> link_layer_;
     V2XNode* node_;
     bool tf_received_;
     int tf_interval_;

@@ -65,6 +65,8 @@ namespace v2x
     this->declare_parameter<bool>("is_sender");
     this->declare_parameter<bool>("cam_enabled");
     this->declare_parameter<bool>("cpm_enabled");
+    this->declare_parameter<bool>("print_rx_msg");
+    this->declare_parameter<bool>("print_tx_msg");
     this->declare_parameter<std::string>("security", "none");
     this->declare_parameter<std::string>("certificate", "");
     this->declare_parameter<std::string>("certificate-key", "");
@@ -201,12 +203,24 @@ namespace v2x
 
   void V2XNode::publishReceivedCam(etsi_its_cam_ts_msgs::msg::CAM &msg) {
     RCLCPP_INFO(get_logger(), "Publishing received CAM to ROS network");
-    cam_rec_pub_->publish(msg);
+    try {
+      cam_rec_pub_->publish(msg);
+    } catch (const std::exception &e) {
+      RCLCPP_ERROR(get_logger(), "Failed to publish received CAM: %s", e.what());
+    } catch (...) {
+      RCLCPP_ERROR(get_logger(), "An unknown error occurred while publishing received CAM");
+    }
   }
 
   void V2XNode::publishSentCam(etsi_its_cam_ts_msgs::msg::CAM &msg) {
     RCLCPP_INFO(get_logger(), "Publishing sent CAM to ROS network");
-    cam_sent_pub_->publish(msg);
+    try {
+      cam_sent_pub_->publish(msg);
+    } catch (const std::exception &e) {
+      RCLCPP_ERROR(get_logger(), "Failed to publish sent CAM: %s", e.what());
+    } catch (...) {
+      RCLCPP_ERROR(get_logger(), "An unknown error occurred while publishing received CAM");
+    }
   }
 
   void V2XNode::gpsFixCallback(const gps_msgs::msg::GPSFix::ConstSharedPtr msg) {

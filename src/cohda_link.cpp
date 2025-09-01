@@ -48,7 +48,7 @@ boost::optional<EthernetHeader> CohdaLink::parse_ethernet_header(vanetza::Cohesi
 
     packet.set_boundary(OsiLayer::Physical, cohda_header_size);
     packet.set_boundary(OsiLayer::Link, link_layer_size);
-    packet.set_boundary(OsiLayer::Network, packet.size());
+    // packet.trim(OsiLayer::Network, packet.size(OsiLayer::Network) - access::ieee802::dot11::fcs_length_bytes);
 
     const auto& link_layer_bytes = packet[OsiLayer::Link];
     EthernetHeader eth;
@@ -71,8 +71,8 @@ boost::optional<EthernetHeader> CohdaLink::parse_ethernet_header(vanetza::Cohesi
     return eth;
 }
 
-void CohdaLink::rx_callback(it2s_ublox_t *ublox, void* user_data, uint8_t* buf, uint16_t packet_len){
-  auto* self = static_cast<CohdaLink*>(user_data);
+void CohdaLink::rx_callback(it2s_ublox_t *ublox, void* user_data, uint8_t* buf, uint16_t packet_len) {
+  auto* self = static_cast<CohdaLink*>(ublox->userData);
 
   // For debugging, print the raw received hex string.
   // char *rx_hex = (char*)malloc(packet_len*2+2);
@@ -83,14 +83,17 @@ void CohdaLink::rx_callback(it2s_ublox_t *ublox, void* user_data, uint8_t* buf, 
   // printf("[ublox]<- received packet |size:%dB data:%.*s\n", packet_len, packet_len*2, rx_hex);
   // free(rx_hex);
 
-  ByteBuffer buffer(buf, buf + packet_len);
+  ByteBuffer buffer(buf, buf + packet_len - 4);
   CohesivePacket packet(std::move(buffer), OsiLayer::Physical);
+  if (!self) {
+    fprintf(stderr, "[ublox]<- Error: CohdaLink instance is null.\n");
+    return;
+  }
   boost::optional<EthernetHeader> eth = self->parse_ethernet_header(packet);
 
-  if (eth) {
+  if (eth && self->indicate_to_router_) {
     self->indicate_to_router_(std::move(packet), *eth);
   } else {
-    // Optional: Handle the case where a packet could not be parsed.
     fprintf(stderr, "[ublox]<- Packet parsing failed.\n");
   }
 }
@@ -143,14 +146,14 @@ void CohdaLink::request(const vanetza::access::DataRequest& request, std::unique
   it2s_ublox_tx_packet(this->ublox, &this->ublox->config, whole_packet, whole_packet_len);
 
   // debug
-  char *tx_hex = (char*) malloc(whole_packet_len * 2 + 2);
-  char *buf_ptr = tx_hex;
-  uint8_t *pkt_ptr = whole_packet;
-  for (int i = 0; i < whole_packet_len; i++) {
-    buf_ptr += sprintf(buf_ptr, "%02x", pkt_ptr[i]);
-  }
-  printf("[ublox]-> transmitting packet | size:%d data:%.*s\n", whole_packet_len, whole_packet_len*2, tx_hex);
-  free(tx_hex);
+  // char *tx_hex = (char*) malloc(whole_packet_len * 2 + 2);
+  // char *buf_ptr = tx_hex;
+  // uint8_t *pkt_ptr = whole_packet;
+  // for (int i = 0; i < whole_packet_len; i++) {
+  //   buf_ptr += sprintf(buf_ptr, "%02x", pkt_ptr[i]);
+  // }
+  // printf("[ublox]-> transmitting packet | size:%d data:%.*s\n", whole_packet_len, whole_packet_len*2, tx_hex);
+  // free(tx_hex);
 }
 
 void CohdaLink::indicate(IndicationCallback callback) {
