@@ -19,6 +19,7 @@
 #include <regex>
 #include <sstream>
 #include <memory>
+#include <fstream>
 #include <GeographicLib/UTMUPS.hpp>
 #include <GeographicLib/MGRS.hpp>
 #include <boost/thread.hpp>
@@ -170,14 +171,32 @@ namespace v2x
     }
   }
 
-  void V2XApp::start() {
-    RCLCPP_INFO(node_->get_logger(), "V2X App Launched");
-
-    // Generate ID for this station
+  unsigned long generateStationId() {
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<unsigned long> dis(0, 4294967295);
-    unsigned long stationId = dis(gen);
+    std::uniform_int_distribution<unsigned long> dis(100000000, 999999999);
+    return dis(gen);
+  }
+
+  void V2XApp::start() {
+    unsigned long stationId;
+    if (std::ifstream("/.dockerenv")) {
+      std::ifstream id_file("/v2x/.station_id");
+      if (id_file.is_open()) {
+        id_file >> stationId;
+        id_file.close();
+        RCLCPP_INFO(node_->get_logger(), "Running in a Docker container, Station ID: %lu", stationId);
+      } else {
+        stationId = generateStationId();
+        std::ofstream out_file("/v2x/.station_id");
+        out_file << stationId;
+        out_file.close();
+        RCLCPP_INFO(node_->get_logger(), "Running in a Docker container, generated Station ID: %lu", stationId);
+      }
+    } else {
+      stationId = generateStationId();
+      RCLCPP_INFO(node_->get_logger(), "Not running in a Docker container, generated Station ID: %lu", stationId);
+    }
 
     boost::asio::io_service io_service;
     TimeTrigger trigger(io_service);
@@ -209,7 +228,6 @@ namespace v2x
     }
 
     vanetza::MacAddress mac_address;
-    std::unique_ptr<LinkLayer> link_layer;
     if (!is_ip) {
       EthernetDevice device(target_device.c_str());
       mac_address = device.address();
@@ -218,11 +236,11 @@ namespace v2x
       sout << mac_address;
       RCLCPP_INFO(node_->get_logger(), "MAC Address: '%s'", sout.str().c_str());
 
-      link_layer = create_link_layer(io_service, link_layer_name, device);
+      link_layer_ = create_link_layer(io_service, link_layer_name, device);
       RCLCPP_INFO(node_->get_logger(), "IP Interface: %s", target_device.c_str());
     } else {
       if (link_layer_name == "cube-evk") {
-        link_layer = create_link_layer(io_service, link_layer_name, target_device);
+        link_layer_ = create_link_layer(io_service, link_layer_name, target_device);
         RCLCPP_INFO(node_->get_logger(), "CubeEVK IP: %s", target_device.c_str());
       } else {
         throw std::runtime_error("Invalid link layer: " + link_layer_name);
@@ -266,7 +284,7 @@ namespace v2x
 
     RouterContext context(mib, trigger, *positioning, security.get());
 
-    context.set_link_layer(link_layer.get());
+    context.set_link_layer(link_layer_.get());
 
     bool is_sender;
     bool cam_enabled;
@@ -287,6 +305,8 @@ namespace v2x
       cpm_started_ = true;
     }
 
+    boost::asio::io_service::work work(io_service);
+    RCLCPP_INFO(node_->get_logger(), "V2X App Launched with ID #%lu", stationId);
     io_service.run();
   }
 }

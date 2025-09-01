@@ -85,7 +85,7 @@ it2s_ublox_t *it2s_ublox_init(int channel, char radio, int channel_config, int a
     if (!strcmp(mcs, "MK2MCS_R12BPSK")) {
         ublox->config.mcs = MK2MCS_R12BPSK;
     } else {
-        ublox->config.mcs = 0; 
+        ublox->config.mcs = 0;
     }
     ublox->config.power = power;
 
