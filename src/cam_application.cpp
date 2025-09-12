@@ -9,9 +9,11 @@
 #include "tf2/LinearMath/Matrix3x3.h"
 
 #include "rclcpp/rclcpp.hpp"
+#include <vanetza/asn1/asn1c_conversion.hpp>
 #include <vanetza/btp/ports.hpp>
 #include <vanetza/asn1/packet_visitor.hpp>
 #include <vanetza/facilities/cam_functions.hpp>
+#include <vanetza/net/osi_layer.hpp>
 #include <chrono>
 #include <functional>
 #include <iostream>
@@ -30,6 +32,7 @@
 #include <boost/units/systems/si/prefixes.hpp>
 
 #include <sqlite3.h>
+#include <vanetza/asn1/its/CAM.h>
 
 using namespace vanetza;
 using namespace std::chrono;
@@ -38,6 +41,7 @@ namespace v2x
 {
   CamApplication::CamApplication(V2XNode * node, Runtime & rt, unsigned long stationId, bool is_sender)
   : node_(node),
+    stationId_(stationId),
     runtime_(rt),
     cam_interval_(milliseconds(1000)),
     vehicleDimensions_(),
@@ -50,7 +54,8 @@ namespace v2x
     use_dynamic_generation_rules_(true)
   {
     RCLCPP_INFO(node_->get_logger(), "CamApplication started. is_sender: %s", is_sender_ ? "yes" : "no");
-    stationId_ = stationId;
+    node_->get_parameter("print_rx_msg", print_rx_msg_);
+    node_->get_parameter("print_tx_msg", print_tx_msg_);
     set_interval(cam_interval_);
   }
 
@@ -136,52 +141,79 @@ namespace v2x
 
   void CamApplication::indicate(const Application::DataIndication &indication, Application::UpPacketPtr packet)
   {
+    // Packet debugging output
+    // if (const CohesivePacket *cp = boost::get<CohesivePacket>(&*packet)) {
+    //   printf("Raw data (%zu bytes): ", cp->buffer().size());
+    //   for (OsiLayer ol : osi_layers) {
+    //     printf("\nLayer %d (%zu bytes): ", static_cast<int>(ol), cp->size(ol));
+    //     for (const uint8_t &byte : (*cp)[ol]) {
+    //       printf("%02x ", byte);
+    //     }
+    //   }
+    //   printf("\n");
+    // } else if (const ChunkPacket *chp = boost::get<ChunkPacket>(&*packet)) {
+    //   printf("Raw data (%zu bytes): ", chp->size());
+    //   for (OsiLayer ol : osi_layers) {
+    //     ByteBuffer layer_buffer;
+    //     chp->layer(ol).convert(layer_buffer);
+    //     printf("\nLayer %d (%zu bytes): ", static_cast<int>(ol), layer_buffer.size());
+    //     for (const uint8_t &byte : layer_buffer) {
+    //       printf("%02x ", byte);
+    //     }
+    //   }
+    //   printf("\n");
+    // } else {
+    //   printf("Unknown packet type\n");
+    // }
+
     try {
-      asn1::PacketVisitor<asn1::r2::Cam> visitor;
-      std::shared_ptr<const asn1::r2::Cam> rec_cam_ptr = boost::apply_visitor(visitor, *packet);
+      asn1::PacketVisitor<asn1::Cam> visitor;
+      std::shared_ptr<const asn1::Cam> rec_cam_ptr = boost::apply_visitor(visitor, *packet);
 
       if (!rec_cam_ptr) {
         RCLCPP_INFO(node_->get_logger(), "[CamApplication::indicate] Received invalid CAM");
         return;
       }
 
-      asn1::r2::Cam rec_cam = *rec_cam_ptr;
+      asn1::Cam rec_cam = *rec_cam_ptr;
       auto now = std::chrono::system_clock::now();
       std::chrono::milliseconds now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
-      RCLCPP_INFO(node_->get_logger(), "[CamApplication::indicate] Received CAM from station with ID #%ld at %ld epoch time", rec_cam->header.stationId, now_ms.count());
-      vanetza::facilities::print_indented(std::cout, rec_cam, "  ", 0);
+      RCLCPP_INFO(node_->get_logger(), "[CamApplication::indicate] Received CAM from station with ID #%ld at %ld epoch time", rec_cam->header.stationID, now_ms.count());
+      if (print_rx_msg_) {
+        vanetza::facilities::print_indented(std::cout, rec_cam, "  ", true);
+      }
 
       namespace cam_ts_msgs = etsi_its_cam_ts_msgs::msg;
       namespace access = etsi_its_cam_ts_msgs::access;
       cam_ts_msgs::CAM ros_cam;
 
-      Vanetza_ITS2_ItsPduHeader_t &header = rec_cam->header;
-      access::setItsPduHeader(ros_cam, header.stationId, header.protocolVersion);
+      ItsPduHeader_t &header = rec_cam->header;
+      access::setItsPduHeader(ros_cam, header.stationID, header.protocolVersion);
 
-      Vanetza_ITS2_CamPayload_t &cam = rec_cam->cam;
+      CoopAwareness_t &cam = rec_cam->cam;
 
       cam_ts_msgs::GenerationDeltaTime gdt;
       gdt.value = cam.generationDeltaTime;
       access::setGenerationDeltaTime(ros_cam, access::getUnixNanosecondsFromGenerationDeltaTime(gdt, std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count()));
 
-      Vanetza_ITS2_BasicContainer_t &basic_container = cam.camParameters.basicContainer;
+      BasicContainer_t &basic_container = cam.camParameters.basicContainer;
       access::setStationType(ros_cam, basic_container.stationType);
       access::setReferencePosition(ros_cam,
                                    basic_container.referencePosition.latitude / 1e7,
                                    basic_container.referencePosition.longitude / 1e7,
                                    basic_container.referencePosition.altitude.altitudeValue / 1e2);
       access::setPositionConfidenceEllipse(ros_cam.cam.cam_parameters.basic_container.reference_position.position_confidence_ellipse,
-                                           basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisLength / 1e1,
-                                           basic_container.referencePosition.positionConfidenceEllipse.semiMinorAxisLength / 1e1,
-                                           basic_container.referencePosition.positionConfidenceEllipse.semiMajorAxisOrientation / 1e2);
+                                           basic_container.referencePosition.positionConfidenceEllipse.semiMajorConfidence / 1e1,
+                                           basic_container.referencePosition.positionConfidenceEllipse.semiMinorConfidence / 1e1,
+                                           basic_container.referencePosition.positionConfidenceEllipse.semiMajorOrientation / 1e2);
 
-      Vanetza_ITS2_HighFrequencyContainer_PR &hf_present = cam.camParameters.highFrequencyContainer.present;
-      if (hf_present == Vanetza_ITS2_HighFrequencyContainer_PR_basicVehicleContainerHighFrequency) {
-        Vanetza_ITS2_BasicVehicleContainerHighFrequency_t &bvc = cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency;
+      HighFrequencyContainer_PR &hf_present = cam.camParameters.highFrequencyContainer.present;
+      if (hf_present == HighFrequencyContainer_PR_basicVehicleContainerHighFrequency) {
+        BasicVehicleContainerHighFrequency_t &bvc = cam.camParameters.highFrequencyContainer.choice.basicVehicleContainerHighFrequency;
         access::setHeading(ros_cam, bvc.heading.headingValue / 10);
         access::setSpeed(ros_cam, bvc.speed.speedValue / 100);
         access::setVehicleDimensions(ros_cam, bvc.vehicleLength.vehicleLengthValue / 10, bvc.vehicleWidth / 10);
-        access::setLongitudinalAcceleration(ros_cam, bvc.longitudinalAcceleration.value / 10);
+        access::setLongitudinalAcceleration(ros_cam, bvc.longitudinalAcceleration.longitudinalAccelerationValue / 10);
         ros_cam.cam.cam_parameters.high_frequency_container.basic_vehicle_container_high_frequency.drive_direction.value = bvc.driveDirection;
         ros_cam.cam.cam_parameters.high_frequency_container.basic_vehicle_container_high_frequency.curvature.curvature_value.value = bvc.curvature.curvatureValue / 10;
         ros_cam.cam.cam_parameters.high_frequency_container.basic_vehicle_container_high_frequency.curvature_calculation_mode.value = bvc.curvatureCalculationMode;
@@ -190,28 +222,28 @@ namespace v2x
         // TODO: handle rsu containers
       }
 
-      Vanetza_ITS2_SpecialVehicleContainer_t *&svc = cam.camParameters.specialVehicleContainer;
+      SpecialVehicleContainer_t *&svc = cam.camParameters.specialVehicleContainer;
       if (svc) {
         cam_ts_msgs::SpecialVehicleContainer ros_svc;
 
-        Vanetza_ITS2_SpecialVehicleContainer_PR &present = svc->present;
+        SpecialVehicleContainer_PR &present = svc->present;
         switch (present) {
-          case Vanetza_ITS2_SpecialVehicleContainer_PR_publicTransportContainer:
+          case SpecialVehicleContainer_PR_publicTransportContainer:
           {
-            Vanetza_ITS2_PublicTransportContainer_t &ptc = svc->choice.publicTransportContainer;
+            PublicTransportContainer_t &ptc = svc->choice.publicTransportContainer;
             ros_svc.public_transport_container.embarkation_status.value = ptc.embarkationStatus;
           }
           break;
-          case Vanetza_ITS2_SpecialVehicleContainer_PR_emergencyContainer:
+          case SpecialVehicleContainer_PR_emergencyContainer:
           {
-            Vanetza_ITS2_EmergencyContainer_t &ec = svc->choice.emergencyContainer;
+            EmergencyContainer_t &ec = svc->choice.emergencyContainer;
             ros_svc.emergency_container.light_bar_siren_in_use.set__value(std::vector<uint8_t>(ec.lightBarSirenInUse.buf, ec.lightBarSirenInUse.buf + ec.lightBarSirenInUse.size));
             if (ec.emergencyPriority != nullptr) {
               ros_svc.emergency_container.emergency_priority.set__value(std::vector<uint8_t>(ec.emergencyPriority->buf, ec.emergencyPriority->buf + ec.emergencyPriority->size));
               ros_svc.emergency_container.emergency_priority_is_present = true;
             }
             if (ec.incidentIndication != nullptr) {
-              convert_cause_code_to_ros(ec.incidentIndication->ccAndScc, ros_svc.emergency_container.incident_indication.cc_and_scc);
+              convert_cause_code_to_ros(*ec.incidentIndication, ros_svc.emergency_container.incident_indication.cc_and_scc);
               ros_svc.emergency_container.incident_indication_is_present = true;
             }
           }
@@ -220,6 +252,7 @@ namespace v2x
             break;
         }
 
+        ros_svc.choice = present;
         ros_cam.cam.cam_parameters.special_vehicle_container = ros_svc;
       }
 
@@ -404,6 +437,10 @@ namespace v2x
 
     RCLCPP_INFO(node_->get_logger(), "[CamApplication::send] Sending CAM from station #%ld with generationDeltaTime %ld, latitude %f, longitude %f, altitude %f",
             stationId_, cam.generationDeltaTime, latitude / 1e7, longitude / 1e7, altitude / 100);
+    if (print_tx_msg_) {
+      vanetza::facilities::print_indented(std::cout, message, "  ", true);
+    }
+
     std::unique_ptr<geonet::DownPacket> payload{new geonet::DownPacket()};
     payload->layer(OsiLayer::Application) = std::move(message);
 

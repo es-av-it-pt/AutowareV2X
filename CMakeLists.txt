@@ -7,9 +7,9 @@ if(NOT CMAKE_C_STANDARD)
   set(CMAKE_C_STANDARD 99)
 endif()
 
-# Default to C++14
+# Default to C++17
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 14)
+  set(CMAKE_CXX_STANDARD 17)
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -26,16 +26,15 @@ find_package(Boost COMPONENTS thread program_options REQUIRED)
 find_package(etsi_its_cam_ts_coding REQUIRED)
 find_package(etsi_its_cam_ts_conversion REQUIRED)
 find_package(etsi_its_msgs_utils REQUIRED)
-ament_auto_find_build_dependencies()
 find_package(std_msgs REQUIRED)
 find_package(gps_msgs REQUIRED)
 find_package(Protobuf REQUIRED)
+ament_auto_find_build_dependencies()
 
 include_directories(
   include
   ${CMAKE_CURRENT_BINARY_DIR}/src
   /opt/ros/humble/include/etsi_its_msgs_utils
-  ../etsi_its_messages/etsi_its_msgs_utils/include
 )
 
 set(SOURCES
@@ -56,30 +55,8 @@ set(SOURCES
 )
 
 if(DEFINED BUILD_COHDA)
-  set(SEARCH_PATHS
-    "/v2x/cohda/llc"
-    "/usr/include/linux/cohda/llc"
-    "/usr/include/cohda/llc"
-  )
-  find_file(COHDA_LLC_API_HEADER llc-api.h
-    PATHS ${SEARCH_PATHS}
-    CMAKE_FIND_ROOT_PATH_BOTH
-    DOC "Cohda LLC API header"
-  )
-  mark_as_advanced(COHDA_LLC_API_HEADER)
-  if(COHDA_LLC_API_HEADER)
-    get_filename_component(COHDA_LLC_INCLUDE_DIR ${COHDA_LLC_API_HEADER} DIRECTORY)
-    include_directories(
-      include
-      ${CMAKE_CURRENT_BINARY_DIR}/src
-      ${COHDA_LLC_INCLUDE_DIR}
-    )
-    list(APPEND SOURCES src/cohda_link.cpp)
-    add_compile_definitions(BUILD_COHDA)
-  else()
-    string(REPLACE ";" " " SEARCH_PATHS_STR "${SEARCH_PATHS}")
-    message(WARNING "Cohda LLC API header not found, could not enable Cohda support.\nSearched in: ${SEARCH_PATHS_STR}")
-  endif()
+  list(APPEND SOURCES src/cohda_link.cpp src/ublox.c)
+  add_compile_definitions(BUILD_COHDA)
 endif()
 
 ament_auto_add_library(autoware_v2x SHARED ${SOURCES})
@@ -97,6 +74,12 @@ target_link_libraries(autoware_v2x
   protobuf::libprotobuf
   gps
 )
+
+if(DEFINED BUILD_COHDA)
+  target_link_libraries(autoware_v2x
+    LLC
+  )
+endif()
 
 rclcpp_components_register_node(autoware_v2x
   PLUGIN "v2x::V2XNode"

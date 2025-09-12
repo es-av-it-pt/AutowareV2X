@@ -96,6 +96,9 @@ private:
   bool sending_;
   bool is_sender_;
 
+  bool print_rx_msg_;
+  bool print_tx_msg_;
+
   bool use_dynamic_generation_rules_;
 };
 }

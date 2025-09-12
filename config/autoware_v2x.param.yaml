@@ -7,6 +7,8 @@
     is_sender: true
     cam_enabled: true
     cpm_enabled: false
+    print_rx_msg: true
+    print_tx_msg: false
     security: "none"
     certificate: ""
     certificate-key: ""
