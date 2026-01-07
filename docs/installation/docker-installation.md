@@ -5,54 +5,40 @@ In order to run the simulations explained in the [Tutorials](/tutorials) section
 !!! Note
     Also refer to [Autoware's Docker Installation](https://autowarefoundation.github.io/autoware-documentation/main/installation/autoware/docker-installation/) for the Docker-based installation of Autoware.universe.
 
-## Installing Autoware (Docker version)
+## Installing Autoware and AutowareV2X (Docker version)
 
-For the newest documentation for the Docker installation of Autoware, see their [official documentation](https://autowarefoundation.github.io/autoware-documentation/main/installation/autoware/docker-installation/).
+Since AutowareV2X hasn't been updated in a while, it's adequate to use an older release of Autoware inside a Docker container, as opposed to the latest (as per the [Official Autoware Documentation](https://autowarefoundation.github.io/autoware-documentation/main/installation/autoware/source-installation/)). Run the following commands:
 
-### Prerequisites
-- git
-
-### Setup
-
-1. Prepare the repository.
 ```bash
+# Clone repository
 mkdir -p ~/workspace && cd ~/workspace
 git clone https://github.com/autowarefoundation/autoware.git autoware_docker
 cd autoware_docker
-```
 
-2. Run the setup script for docker installation.
-```
-./setup-dev-env.sh docker
-```
-You will need to restart your PC after the script is finished running.
+# Switch to the last commit of 2023, this is the version we'll use
+git checkout bf95c380db6debdf07fb9b6854036df567e98903
 
-3. Make directory to store maps
-```
+# Make directory to store maps
 mkdir -p ~/data/maps
+
+# Create the Docker container (let's name it aw-v2x_devel, for example)
+docker run -it --name aw-v2x_devel --gpus all --privileged --user root -e DISPLAY=$DISPLAY -e XAUTHORITY=/root/.Xauthority -v /tmp/.X11-unix:/tmp/.X11-unix:rw -v $HOME/.Xauthority:/root/.Xauthority:rw -v $HOME/workspace:/root/workspace -v $HOME/data:/root/data -w /root/workspace ghcr.io/autowarefoundation/autoware:20240315-devel-cuda
 ```
-
-
-### Launch container
-```
-# Launch Autoware container (with NVIDIA GPU)
-rocker --nvidia --x11 --user --privileged --volume $HOME/workspace/autoware_docker --volume $HOME/data -- ghcr.io/autowarefoundation/autoware-universe:latest-cuda
-
-# Launch Autoware container (without NVIDIA GPU)
-rocker -e LIBGL_ALWAYS_SOFTWARE=1 --x11 --user --privileged --volume $HOME/workspace/autoware_docker --volume $HOME/data -- ghcr.io/autowarefoundation/autoware-universe:latest-cuda
-```
-
-## Adding AutowareV2X
 
 !!! Note
     From here, run commands inside the container.
 
-1. Move into `autoware_docker` directory.
 ```bash
-cd ~/workspace/autoware_docker
+# Fix the outdated signing keys
+rm /etc/apt/sources.list.d/ros2*
+export ROS_APT_SOURCE_VERSION=$(curl -s https://api.github.com/repos/ros-infrastructure/ros-apt-source/releases/latest | grep -F "tag_name" | awk -F\" '{print $4}')
+curl -L -o /tmp/ros2-apt-source.deb "https://github.com/ros-infrastructure/ros-apt-source/releases/download/${ROS_APT_SOURCE_VERSION}/ros2-apt-source_${ROS_APT_SOURCE_VERSION}.$(. /etc/os-release && echo ${UBUNTU_CODENAME:-${VERSION_CODENAME}})_all.deb"
+sudo dpkg -i /tmp/ros2-apt-source.deb
+sudo apt update && sudo apt upgrade
 ```
 
-2. Edit the `autoware.repos` file and replace the following repositories.
+Replace the `autoware.repos` file with the following:
+
 ```
 repositories:
   core/autoware.core:
@@ -149,36 +135,22 @@ repositories:
     version: cfffe9afda177297c59bbb804d3e8f66120c8453
 ```
 
-!!! Note
-    If you want to　follow the latest ver, edit the `autoware.repos` file and add the following two repositories to the end.
-
-```
-v2x/autowarev2x:
-  type: git
-  url: https://github.com/tlab-wide/AutowareV2X.git
-  version: cpm-tr
-v2x/vanetza:
-  type: git
-  url: https://github.com/yuasabe/vanetza.git
-  version: master
-
-```
-
-3. Update the repository
-```
+```shell
+# Use vcstool to import more repositories
 mkdir src
 vcs import src < autoware.repos
-vcs pull src
-```
 
-4. Install dependent ROS packages
-```bash
-sudo apt update
+# Apply patch to fix build errors (this will be updated properly in the future)
+cd src/universe/autoware.universe
+git apply <(curl https://github.com/diogotavc/autoware.universe/commit/a33574b0373c66250f30af4fd7d59ab1cc30b7d8.patch)
+cd -
+
+# Install dependent ROS packages
+source /opt/ros/humble/setup.bash
 rosdep update
-rosdep install --from-paths . --ignore-src --rosdistro $ROS_DISTRO -r
-```
+# seems rosdep tries to pull Vanetza as an external dependency, dunno why -- it's compiled later
+rosdep install -y --from-paths src --ignore-src --rosdistro $ROS_DISTRO --skip-keys "Vanetza"
 
-5. Build the workspace
-```
+# Build the workspace
 colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
 ```
