@@ -2,10 +2,7 @@
 
 Simulations can be an easy way of verifying the functionality of AutowareV2X before an actual field test.
 
-AutowareV2X can be run in a simulation environment using [Autoware's Planning Simulator](https://autowarefoundation.github.io/autoware-documentation/main/tutorials/ad-hoc-simulation/planning-simulation/). An ITS-S is composed of Autoware as the autonomous driving stack and AutowareV2X as its V2X communication stack. Each ITS-S is executed inside a Docker container, and the wireless communication medium between ITS-Ss are modeled with Docker networks. A dynamic ITS-S is defined as a CAV, while a static ITS-S is considered a RSU. Perceived Objects are sent out on the network as CPMs.
-
-!!! Note
-    Make sure you have completed [Autoware's Planning Simulator Tutorial](https://autowarefoundation.github.io/autoware-documentation/main/tutorials/ad-hoc-simulation/planning-simulation/) before continuing.
+An ITS-S is composed of Autoware as the autonomous driving stack and AutowareV2X as its V2X communication stack. Each ITS-S is executed inside a Docker container, and the wireless communication medium between ITS-Ss are modeled with Docker networks. A dynamic ITS-S is defined as a CAV, while a static ITS-S is considered a RSU. Perceived Objects are sent out on the network as CPMs.
 
 In order to test both the sender and receiver functionalities, we will need at least two ITS-S instances.
 
