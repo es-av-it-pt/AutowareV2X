@@ -1,0 +1,283 @@
+From a33574b0373c66250f30af4fd7d59ab1cc30b7d8 Mon Sep 17 00:00:00 2001
+From: diogotavc <diogotavc@protonmail.com>
+Date: Thu, 18 Dec 2025 01:19:04 +0000
+Subject: [PATCH] build: fix compilation on CUDA 12, TensorRT 8.6 and ROS 2
+ Humble
+
+---
+ .../tf2_autoware_auto_msgs.hpp                | 98 +++++++++----------
+ common/tensorrt_common/CMakeLists.txt         |  2 +
+ common/trtexec_vendor/CMakeLists.txt          |  2 +-
+ perception/lidar_centerpoint/CMakeLists.txt   | 10 ++
+ .../include/lidar_centerpoint/cuda_utils.hpp  |  8 +-
+ perception/tensorrt_yolo/CMakeLists.txt       |  2 +
+ .../tensorrt_yolo/lib/include/cuda_utils.hpp  |  8 +-
+ .../CMakeLists.txt                            |  2 +
+ 8 files changed, 74 insertions(+), 58 deletions(-)
+
+diff --git a/common/autoware_auto_tf2/include/autoware_auto_tf2/tf2_autoware_auto_msgs.hpp b/common/autoware_auto_tf2/include/autoware_auto_tf2/tf2_autoware_auto_msgs.hpp
+index 9b20953a..88bd315d 100644
+--- a/common/autoware_auto_tf2/include/autoware_auto_tf2/tf2_autoware_auto_msgs.hpp
++++ b/common/autoware_auto_tf2/include/autoware_auto_tf2/tf2_autoware_auto_msgs.hpp
+@@ -47,55 +47,55 @@ namespace tf2
+ {
+ 
+ /*************/
+-/** Point32 **/
+-/*************/
+-
+-/** \brief Apply a geometry_msgs TransformStamped to a geometry_msgs Point32 type.
+- * This function is a specialization of the doTransform template defined in tf2/convert.h.
+- * \param t_in The point to transform, as a Point32 message.
+- * \param t_out The transformed point, as a Point32 message.
+- * \param transform The timestamped transform to apply, as a TransformStamped message.
+- */
+-template <>
+-inline void doTransform(
+-  const geometry_msgs::msg::Point32 & t_in, geometry_msgs::msg::Point32 & t_out,
+-  const geometry_msgs::msg::TransformStamped & transform)
+-{
+-  const KDL::Vector v_out = gmTransformToKDL(transform) * KDL::Vector(t_in.x, t_in.y, t_in.z);
+-  t_out.x = static_cast<float>(v_out[0]);
+-  t_out.y = static_cast<float>(v_out[1]);
+-  t_out.z = static_cast<float>(v_out[2]);
+-}
+-
+-/*************/
+-/** Polygon **/
+-/*************/
+-
+-/** \brief Apply a geometry_msgs TransformStamped to a geometry_msgs Polygon type.
+- * This function is a specialization of the doTransform template defined in tf2/convert.h.
+- * \param t_in The polygon to transform.
+- * \param t_out The transformed polygon.
+- * \param transform The timestamped transform to apply, as a TransformStamped message.
+- */
+-template <>
+-inline void doTransform(
+-  const geometry_msgs::msg::Polygon & t_in, geometry_msgs::msg::Polygon & t_out,
+-  const geometry_msgs::msg::TransformStamped & transform)
+-{
+-  // Don't call the Point32 doTransform to avoid doing this conversion every time
+-  const auto kdl_frame = gmTransformToKDL(transform);
+-  // We don't use std::back_inserter to allow aliasing between t_in and t_out
+-  t_out.points.resize(t_in.points.size());
+-  for (size_t i = 0; i < t_in.points.size(); ++i) {
+-    const KDL::Vector v_out =
+-      kdl_frame * KDL::Vector(t_in.points[i].x, t_in.points[i].y, t_in.points[i].z);
+-    t_out.points[i].x = static_cast<float>(v_out[0]);
+-    t_out.points[i].y = static_cast<float>(v_out[1]);
+-    t_out.points[i].z = static_cast<float>(v_out[2]);
+-  }
+-}
+-
+-/******************/
++// /** Point32 **/
++// /*************/
++// 
++// /** \brief Apply a geometry_msgs TransformStamped to a geometry_msgs Point32 type.
++//  * This function is a specialization of the doTransform template defined in tf2/convert.h.
++//  * \param t_in The point to transform, as a Point32 message.
++//  * \param t_out The transformed point, as a Point32 message.
++//  * \param transform The timestamped transform to apply, as a TransformStamped message.
++//  */
++// template <>
++// inline void doTransform(
++//   const geometry_msgs::msg::Point32 & t_in, geometry_msgs::msg::Point32 & t_out,
++//   const geometry_msgs::msg::TransformStamped & transform)
++// {
++//   const KDL::Vector v_out = gmTransformToKDL(transform) * KDL::Vector(t_in.x, t_in.y, t_in.z);
++//   t_out.x = static_cast<float>(v_out[0]);
++//   t_out.y = static_cast<float>(v_out[1]);
++//   t_out.z = static_cast<float>(v_out[2]);
++// }
++// 
++// /*************/
++// /** Polygon **/
++// /*************/
++// 
++// /** \brief Apply a geometry_msgs TransformStamped to a geometry_msgs Polygon type.
++//  * This function is a specialization of the doTransform template defined in tf2/convert.h.
++//  * \param t_in The polygon to transform.
++//  * \param t_out The transformed polygon.
++//  * \param transform The timestamped transform to apply, as a TransformStamped message.
++//  */
++// template <>
++// inline void doTransform(
++//   const geometry_msgs::msg::Polygon & t_in, geometry_msgs::msg::Polygon & t_out,
++//   const geometry_msgs::msg::TransformStamped & transform)
++// {
++//   // Don't call the Point32 doTransform to avoid doing this conversion every time
++//   const auto kdl_frame = gmTransformToKDL(transform);
++//   // We don't use std::back_inserter to allow aliasing between t_in and t_out
++//   t_out.points.resize(t_in.points.size());
++//   for (size_t i = 0; i < t_in.points.size(); ++i) {
++//     const KDL::Vector v_out =
++//       kdl_frame * KDL::Vector(t_in.points[i].x, t_in.points[i].y, t_in.points[i].z);
++//     t_out.points[i].x = static_cast<float>(v_out[0]);
++//     t_out.points[i].y = static_cast<float>(v_out[1]);
++//     t_out.points[i].z = static_cast<float>(v_out[2]);
++//   }
++// }
++// 
++// /******************/
+ /** Quaternion32 **/
+ /******************/
+ 
+diff --git a/common/tensorrt_common/CMakeLists.txt b/common/tensorrt_common/CMakeLists.txt
+index 1714c5a4..f9a6c3d3 100644
+--- a/common/tensorrt_common/CMakeLists.txt
++++ b/common/tensorrt_common/CMakeLists.txt
+@@ -1,6 +1,8 @@
+ cmake_minimum_required(VERSION 3.5)
+ project(tensorrt_common)
+ 
++add_compile_options(-Wno-error=deprecated-declarations)
++
+ find_package(autoware_cmake REQUIRED)
+ autoware_package()
+ 
+diff --git a/common/trtexec_vendor/CMakeLists.txt b/common/trtexec_vendor/CMakeLists.txt
+index 220e7e6d..0efa312f 100644
+--- a/common/trtexec_vendor/CMakeLists.txt
++++ b/common/trtexec_vendor/CMakeLists.txt
+@@ -37,7 +37,7 @@ if(NOT EXISTS TRTEXEC_DEFAULT_BIN)
+   endif()
+   fetchcontent_declare(tensorrt
+     GIT_REPOSITORY https://github.com/NVIDIA/TensorRT
+-    GIT_TAG ${TENSORRT_VERSION}
++    GIT_TAG v${TENSORRT_VERSION}
+     GIT_SUBMODULES ""
+   )
+   fetchcontent_getproperties(tensorrt)
+diff --git a/perception/lidar_centerpoint/CMakeLists.txt b/perception/lidar_centerpoint/CMakeLists.txt
+index 25912666..ee7c21dc 100644
+--- a/perception/lidar_centerpoint/CMakeLists.txt
++++ b/perception/lidar_centerpoint/CMakeLists.txt
+@@ -1,6 +1,8 @@
+ cmake_minimum_required(VERSION 3.14)
+ project(lidar_centerpoint)
+ 
++add_compile_options(-Wno-error=deprecated-declarations)
++
+ find_package(autoware_cmake REQUIRED)
+ autoware_package()
+ 
+@@ -115,6 +117,9 @@ if(TRT_AVAIL AND CUDA_AVAIL AND CUDNN_AVAIL)
+   download(v1 pts_backbone_neck_head_centerpoint_tiny.onnx e97c165c7877222c0e27e44409a07517)
+ 
+   find_package(ament_cmake_auto REQUIRED)
++  # [FIX 1/2] Find the missing package explicitly
++  find_package(tf2_sensor_msgs REQUIRED)
++  
+   ament_auto_find_build_dependencies()
+ 
+   include_directories(
+@@ -151,6 +156,11 @@ if(TRT_AVAIL AND CUDA_AVAIL AND CUDNN_AVAIL)
+     ${CUDNN_LIBRARY}
+     centerpoint_cuda_lib
+   )
++  
++  # [FIX 2/2] Link the missing package to the library
++  ament_target_dependencies(centerpoint_lib
++    tf2_sensor_msgs
++  )
+ 
+   target_include_directories(centerpoint_lib
+     PUBLIC
+diff --git a/perception/lidar_centerpoint/include/lidar_centerpoint/cuda_utils.hpp b/perception/lidar_centerpoint/include/lidar_centerpoint/cuda_utils.hpp
+index c1d84666..f8ccb105 100644
+--- a/perception/lidar_centerpoint/include/lidar_centerpoint/cuda_utils.hpp
++++ b/perception/lidar_centerpoint/include/lidar_centerpoint/cuda_utils.hpp
+@@ -56,10 +56,10 @@ namespace cuda
+ inline void check_error(const ::cudaError_t e, const char * f, int n)
+ {
+   if (e != ::cudaSuccess) {
+-    std::stringstream s;
++    ::std::stringstream s;
+     s << ::cudaGetErrorName(e) << " (" << e << ")@" << f << "#L" << n << ": "
+       << ::cudaGetErrorString(e);
+-    throw std::runtime_error{s.str()};
++    throw ::std::runtime_error{s.str()};
+   }
+ }
+ 
+@@ -69,7 +69,7 @@ struct deleter
+ };
+ 
+ template <typename T>
+-using unique_ptr = std::unique_ptr<T, deleter>;
++using unique_ptr = ::std::unique_ptr<T, deleter>;
+ 
+ template <typename T>
+ typename std::enable_if<std::is_array<T>::value, cuda::unique_ptr<T>>::type make_unique(
+@@ -107,7 +107,7 @@ inline T * get_next_ptr(size_t num_elem, void *& workspace, size_t & workspace_s
+ {
+   size_t size = get_size_aligned<T>(num_elem);
+   if (size > workspace_size) {
+-    throw std::runtime_error("Workspace is too small!");
++    throw ::std::runtime_error("Workspace is too small!");
+   }
+   workspace_size -= size;
+   T * ptr = reinterpret_cast<T *>(workspace);
+diff --git a/perception/tensorrt_yolo/CMakeLists.txt b/perception/tensorrt_yolo/CMakeLists.txt
+index 56d444bd..131cc6a6 100755
+--- a/perception/tensorrt_yolo/CMakeLists.txt
++++ b/perception/tensorrt_yolo/CMakeLists.txt
+@@ -1,6 +1,8 @@
+ cmake_minimum_required(VERSION 3.14)
+ project(tensorrt_yolo)
+ 
++add_compile_options(-Wno-error=deprecated-declarations)
++
+ find_package(autoware_cmake REQUIRED)
+ autoware_package()
+ 
+diff --git a/perception/tensorrt_yolo/lib/include/cuda_utils.hpp b/perception/tensorrt_yolo/lib/include/cuda_utils.hpp
+index a3b53a73..8afc982b 100644
+--- a/perception/tensorrt_yolo/lib/include/cuda_utils.hpp
++++ b/perception/tensorrt_yolo/lib/include/cuda_utils.hpp
+@@ -57,10 +57,10 @@ namespace cuda
+ void check_error(const ::cudaError_t e, const char * f, int n)
+ {
+   if (e != ::cudaSuccess) {
+-    std::stringstream s;
++    ::std::stringstream s;
+     s << ::cudaGetErrorName(e) << " (" << e << ")@" << f << "#L" << n << ": "
+       << ::cudaGetErrorString(e);
+-    throw std::runtime_error{s.str()};
++    throw ::std::runtime_error{s.str()};
+   }
+ }
+ 
+@@ -69,7 +69,7 @@ struct deleter
+   void operator()(void * p) const { CHECK_CUDA_ERROR(::cudaFree(p)); }
+ };
+ template <typename T>
+-using unique_ptr = std::unique_ptr<T, deleter>;
++using unique_ptr = ::std::unique_ptr<T, deleter>;
+ 
+ template <typename T>
+ typename std::enable_if<std::is_array<T>::value, cuda::unique_ptr<T>>::type make_unique(
+@@ -107,7 +107,7 @@ inline T * get_next_ptr(size_t num_elem, void *& workspace, size_t & workspace_s
+ {
+   size_t size = get_size_aligned<T>(num_elem);
+   if (size > workspace_size) {
+-    throw std::runtime_error("Workspace is too small!");
++    throw ::std::runtime_error("Workspace is too small!");
+   }
+   workspace_size -= size;
+   T * ptr = reinterpret_cast<T *>(workspace);
+diff --git a/perception/traffic_light_ssd_fine_detector/CMakeLists.txt b/perception/traffic_light_ssd_fine_detector/CMakeLists.txt
+index c98e880e..b3676aee 100644
+--- a/perception/traffic_light_ssd_fine_detector/CMakeLists.txt
++++ b/perception/traffic_light_ssd_fine_detector/CMakeLists.txt
+@@ -1,6 +1,8 @@
+ cmake_minimum_required(VERSION 3.14)
+ project(traffic_light_ssd_fine_detector)
+ 
++add_compile_options(-Wno-error=deprecated-declarations)
++
+ find_package(autoware_cmake REQUIRED)
+ autoware_package()
+ 

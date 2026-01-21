@@ -127,8 +127,8 @@ repositories:
     version: 157238ca77de7b0a59f71a0b28f456741fab3ca2
   v2x/autowarev2x:
     type: git
-    url: https://github.com/tlab-wide/AutowareV2X.git
-    version: 48a1f2d3db6ae59e92febb93aad7cde760f4f3ec
+    url: https://github.com/es-av-it-pt/AutowareV2X.git
+    version: docs/fix-build-instructions
   v2x/vanetza:
     type: git
     url: https://github.com/yuasabe/vanetza.git
@@ -142,7 +142,7 @@ vcs import src < autoware.repos
 
 # Apply patch to fix build errors (this will be updated properly in the future)
 cd src/universe/autoware.universe
-git apply <(curl https://github.com/diogotavc/autoware.universe/commit/a33574b0373c66250f30af4fd7d59ab1cc30b7d8.patch)
+git apply ../../v2x/autowarev2x/patches/build-fix_universe.patch
 cd -
 
 # Install dependent ROS packages
