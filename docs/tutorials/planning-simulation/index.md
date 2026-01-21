@@ -18,42 +18,39 @@ We will be creating the Docker environment as depicted in the figure below. Ther
 docker network create --driver=bridge --subnet=10.0.0.0/24 v2x_net -o com.docker.network.bridge.name="v2x_net"
 ```
 
-
 ### Launch two ITS-S containers
 
-!!! Note
-    Here, we will use a Rocker extension called [off-your-rocker](https://github.com/sloretz/off-your-rocker).
-    Install `off-your-rocker` by running the below:
-    ```bash
-    python3 -m pip install off-your-rocker
-    ```
+In one terminal, launch container `autoware_1`:
 
-In one terminal, use rocker to launch container `autoware_1`:
 ```bash
-rocker --nvidia --x11 --user --privileged --volume $HOME/workspace/autoware_docker --volume $HOME/data --network=v2x_net --name autoware_1 --oyr-run-arg "--ip 10.0.0.2 --hostname autoware_1" -- ghcr.io/autowarefoundation/autoware-universe:latest-cuda
+docker run -it --name autoware_1 --net v2x_net --ip 10.0.0.2 --hostname autoware_1 --gpus all --privileged --user root -e DISPLAY=$DISPLAY -e XAUTHORITY=/root/.Xauthority -v /tmp/.X11-unix:/tmp/.X11-unix:rw -v $HOME/.Xauthority:/root/.Xauthority:rw -v $HOME/workspace:/root/workspace -v $HOME/data:/root/data -w /root/workspace ghcr.io/autowarefoundation/autoware:20240315-devel-cuda
 ```
 
-In another terminal, use rocker to launch container `autoware_2`:
-```
-rocker --nvidia --x11 --user --privileged --volume $HOME/workspace/autoware_docker --volume $HOME/data --network=v2x_net --name autoware_2 --oyr-run-arg "--ip 10.0.0.3 --hostname autoware_2" -- ghcr.io/autowarefoundation/autoware-universe:latest-cuda
+In another terminal, launch container `autoware_2`:
+
+```bash
+docker run -it --name autoware_2 --net v2x_net --ip 10.0.0.3 --hostname autoware_2 --gpus all --privileged --user root -e DISPLAY=$DISPLAY -e XAUTHORITY=/root/.Xauthority -v /tmp/.X11-unix:/tmp/.X11-unix:rw -v $HOME/.Xauthority:/root/.Xauthority:rw -v $HOME/workspace:/root/workspace -v $HOME/data:/root/data -w /root/workspace ghcr.io/autowarefoundation/autoware:20240315-devel-cuda
 ```
 
 ## Run Planning Simulator
+
+!!! Note
+    This section hasn't been updated or tested.
+    Thus, even with the appropriate command changes implemented above, it may not work adequately.
 
 Run the Planning Simulator in both `autoware_1` and `autoware_2`.
 
 In `autoware_1`:
 
-```
+```bash
 cd ~/workspace/autoware_docker
 source install/setup.bash
 export AWID=1 # autoware_1
-source ~/workspace/autoware_docker/src/v2x/autowarev2x/setup.sh
+source src/v2x/autowarev2x/setup.sh
 ros2 launch autoware_launch planning_simulator.launch.xml map_path:=$HOME/data/maps/sample-map-planning vehicle_model:=sample_vehicle sensor_model:=sample_sensor_kit
 ```
 
 Also, in `autoware_1`, set the ego-vehicle position by clicking `2D Pose Estimate`.
-
 Try adding some dummy cars by clicking `2D Dummy Car`.
 Note that you can make the dummy cars to be static by changing its `Velocity` to `0` in the `Tool Properties` pane.
 
@@ -63,27 +60,25 @@ Note that you can make the dummy cars to be static by changing its `Velocity` to
 
 In `autoware_2`:
 
-```
+```bash
 cd ~/workspace/autoware_docker
 source install/setup.bash
 export AWID=2 # autoware_2
-source ~/workspace/autoware_docker/src/v2x/autowarev2x/setup.sh
+source src/v2x/autowarev2x/setup.sh
 ros2 launch autoware_launch planning_simulator.launch.xml map_path:=$HOME/data/maps/sample-map-planning vehicle_model:=sample_vehicle sensor_model:=sample_sensor_kit
 ```
-
 
 ## Run AutowareV2X
 
 In another terminal, connect to the `autoware_1` and `autoware_2` containers, and start AutowareV2X in both of them. We will set `autoware_1` to be the CPM sender, and `autoware_2` to be the CPM receiver.
 
-In `autoware_1`:
-```
-docker exec -it autoware_1 bash
-sudo su
-cd workspace/autoware_docker
+In a new `autoware_1` terminal:
+
+```bash
+cd ~/workspace/autoware_docker
 source install/setup.bash
 export AWID=1
-source ./src/v2x/autowarev2x/setup.sh
+source src/v2x/autowarev2x/setup.sh
 ros2 launch autoware_v2x v2x.launch.xml network_interface:=eth0
 ```
 
@@ -92,13 +87,12 @@ It shows that you are "Sending CPM with n objects", and the `[objectsList]` line
 ![](./autowarev2x_sender.png)
 
 In `autoware_2`:
-```
-docker exec -it autoware_2 bash
-sudo su
-cd workspace/autoware_docker
+
+```bash
+cd ~/workspace/autoware_docker
 source install/setup.bash
 export AWID=2
-source ./src/v2x/autowarev2x/setup.sh
+source src/v2x/autowarev2x/setup.sh
 ros2 launch autoware_v2x v2x.launch.xml network_interface:=eth0 is_sender:=false
 ```
 
