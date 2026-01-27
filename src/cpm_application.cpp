@@ -37,11 +37,11 @@ namespace v2x {
     runtime_(rt),
     ego_(),
     generationTime_(0),
-    objectConfidenceThreshold_(0.0),
     updating_objects_list_(false),
     sending_(false),
     is_sender_(is_sender),
     reflect_packet_(false),
+    objectConfidenceThreshold_(0.0),
     include_all_persons_and_animals_(false),
     cpm_num_(0),
     received_cpm_num_(0),
@@ -80,7 +80,7 @@ namespace v2x {
     return ss.str();
   }
 
-  void CpmApplication::indicate(const DataIndication & /* indication */, UpPacketPtr packet) {
+  void CpmApplication::indicate(const DataIndication &indication, UpPacketPtr packet) {
 
     asn1::PacketVisitor<asn1::Cpm> visitor;
     std::shared_ptr<const asn1::Cpm> cpm = boost::apply_visitor(visitor, *packet);

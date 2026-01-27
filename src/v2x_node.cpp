@@ -54,10 +54,7 @@ namespace v2x
     s << "20" << lt->tm_year-100 <<"-" << lt->tm_mon+1 << "-" << lt->tm_mday << "_" << lt->tm_hour << ":" << lt->tm_min << ":" << lt->tm_sec;
     std::string timestamp = s.str();
     char cur_dir[1024];
-    if (getcwd(cur_dir, 1024) == nullptr) {
-      RCLCPP_ERROR(get_logger(), "Failed to get current directory");
-      std::strcpy(cur_dir, ".");
-    }
+    getcwd(cur_dir, 1024);
     std::string latency_log_filename = std::string(cur_dir) + "/latency_logs/latency_log_file_" + timestamp + ".csv";
     latency_log_file.open(latency_log_filename, std::ios::out);
   }
