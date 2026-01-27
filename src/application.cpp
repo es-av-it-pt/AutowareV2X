@@ -6,7 +6,7 @@
 
 using namespace vanetza;
 
-Application::DataConfirm Application::request(const DataRequest &request, DownPacketPtr packet, rclcpp::Node* node)
+Application::DataConfirm Application::request(const DataRequest &request, DownPacketPtr packet, rclcpp::Node* /* node */)
 {
   // RCLCPP_INFO(node->get_logger(), "Inside Application::request 0");
   DataConfirm confirm(DataConfirm::ResultCode::Rejected_Unspecified);
