@@ -101,7 +101,8 @@ namespace v2x {
 
 
       // Calculate GDT and get GDT from CPM and calculate the "Age of CPM"
-      TimestampIts_t gt_cpm = message->cpm.generationTime;
+      // Note: TimestampIts_t is no longer available in newer CPM versions
+      // long gt_cpm = message->cpm.generationDeltaTime;
       // const auto time_now = duration_cast<milliseconds> (runtime_.now().time_since_epoch());
       // uint16_t gdt = time_now.count();
       // int gdt_diff = (65536 + (gdt - gdt_cpm) % 65536) % 65536;
@@ -458,9 +459,9 @@ namespace v2x {
 
       CollectivePerceptionMessage_t &cpm = message->cpm;
 
-      // Set GenerationTime
+      // Set GenerationDeltaTime
       RCLCPP_INFO(node_->get_logger(), "[CpmApplication::send] %ld", gdt_timestamp_);
-      asn_long2INTEGER(&cpm.generationTime, (long) gdt_timestamp_);
+      cpm.generationDeltaTime = gdt_timestamp_;
 
       CpmManagementContainer_t &management = cpm.cpmParameters.managementContainer;
       management.stationType = StationType_passengerCar;
